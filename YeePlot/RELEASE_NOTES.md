@@ -2,6 +2,12 @@ Yeemo 伺服器的地皮插件（PlotSquared 的輕量版），直接讀寫 Plot
 
 > ⚠️ 這是預覽版本，尚未在正式伺服器上長時間運作。請先在測試服使用備份資料測試，再上線。
 
+## 1.4.0 更新內容
+- 支援 PlotSquared 的 AUGMENTED 地皮世界（在原版等原本地形上劃出地皮格線，worlds.yml 有 `generator.type: AUGMENTED`）。
+  之前這種世界會被整個略過，地皮讀不到
+- 這種世界的地形不屬於 YeePlot，任何操作都不會修改：刪除只取消認領、清除與修復道路停用、合併只合併資料、認領不放圍牆半磚
+- 世界維持原本的生成器（Multiverse 裡的 generator 不要改）
+
 ## 1.3.2 修正
 - 修正 `/plot visit <玩家> <別名>`（以及 `/plot home <玩家> <別名>`）沒有讀取別名，總是傳送到第一塊地皮；找不到別名時會提示，不會傳送
 
@@ -55,4 +61,4 @@ Yeemo 伺服器的地皮插件（PlotSquared 的輕量版），直接讀寫 Plot
 權限節點與 PlotSquared 相同。完整說明見 [README](https://github.com/yoyolee-minecraft/PlotSquared-yeemo#readme)。
 
 ## 不支援
-拆分合併、L 形合併、time 與 weather 以外的 flags（資料庫中的 flags 會原樣保留）、道路與地皮模板、部分地皮區域（generator.type 2）、叢集、評分、留言、經濟。
+拆分合併、L 形合併、time 與 weather 以外的 flags（資料庫中的 flags 會原樣保留）、道路與地皮模板、部分地皮區域（generator.type PARTIAL）、叢集、評分、留言、經濟。

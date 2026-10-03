@@ -67,6 +67,8 @@ messages:
   undenied: "&a已解除對 &f{player} &a的禁止"
   you-were-denied: "&c你被禁止進入這塊地皮"
   cannot-enter: "&c你被禁止進入這塊地皮"
+  terrain-not-managed: "&c這個世界的地形不是由地皮插件產生（疊加在原本地形上的地皮區域），無法清除或重設地形"
+  delete-keeps-terrain: "&e這個世界的地形不是由地皮插件產生，刪除只會取消認領，地皮上的建築會保留"
   clearing: "&7正在清除地皮，請稍候..."
   cleared: "&a地皮已清除完成"
   deleting: "&7正在刪除地皮，請稍候..."

@@ -23,6 +23,39 @@ public final class PlotWorld {
         PLOT, WALL, ROAD
     }
 
+    /**
+     * PlotSquared 的地皮區域類型（worlds.yml 的 generator.type）。
+     */
+    public enum AreaType {
+        /**
+         * 整個世界都是地皮世界，地形由地皮生成器產生。
+         */
+        NORMAL,
+        /**
+         * 整個世界都是地皮區域，但地形由世界原本的生成器產生（例如原版地形），只是在上面劃出地皮格線。
+         */
+        AUGMENTED,
+        /**
+         * 只在世界中劃出部分區域當作地皮（YeePlot 不支援）。
+         */
+        PARTIAL;
+
+        /**
+         * 解析 generator.type；PlotSquared 舊版用數字 0、1、2。無法辨識時回傳 null。
+         */
+        public static AreaType parse(String value) {
+            if (value == null) {
+                return NORMAL;
+            }
+            return switch (value.trim().toUpperCase(Locale.ROOT)) {
+                case "", "0", "NORMAL" -> NORMAL;
+                case "1", "AUGMENTED" -> AUGMENTED;
+                case "2", "PARTIAL" -> PARTIAL;
+                default -> null;
+            };
+        }
+    }
+
     private final String name;
 
     public final int plotWidth;
@@ -63,6 +96,15 @@ public final class PlotWorld {
     public final BlockPattern wallFilling;
     public final BlockPattern roadBlock;
     public final Biome biome;
+
+    /**
+     * 地皮區域類型；AUGMENTED 世界的地形不屬於 YeePlot，任何操作都不會修改地形。
+     */
+    public final AreaType areaType;
+    /**
+     * AUGMENTED 世界的 generator.terrain（NONE、ORE、ROAD、ALL），一般世界是 null。
+     */
+    public final String terrain;
 
     public final String homeDefault;
     public final String homeNonMembers;
@@ -105,6 +147,11 @@ public final class PlotWorld {
         this.wallFilling = BlockPattern.parse(config.getString("wall.filling"), "stone", logger);
         this.roadBlock = BlockPattern.parse(config.getString("road.block"), "quartz_block", logger);
         this.biome = parseBiome(config.getString("plot.biome", "FOREST"), logger);
+
+        AreaType type = AreaType.parse(config.getString("generator.type", "NORMAL"));
+        this.areaType = type == null ? AreaType.NORMAL : type;
+        this.terrain = areaType == AreaType.AUGMENTED
+                ? config.getString("generator.terrain", "ALL").toUpperCase(Locale.ROOT) : null;
 
         this.homeDefault = config.getString("home.default", "side");
         this.homeNonMembers = config.getString("home.nonmembers", homeDefault);
@@ -159,6 +206,14 @@ public final class PlotWorld {
 
     public String name() {
         return name;
+    }
+
+    /**
+     * YeePlot 是否負責這個世界的地形（生成、清除、刪除還原、合併鋪地板、圍牆頂端）。
+     * AUGMENTED 世界的地形來自世界原本的生成器，YeePlot 一律不修改。
+     */
+    public boolean managesTerrain() {
+        return areaType == AreaType.NORMAL;
     }
 
     private int relative(int coordinate, int offset) {

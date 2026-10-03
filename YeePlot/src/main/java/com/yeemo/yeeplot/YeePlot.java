@@ -260,13 +260,23 @@ public final class YeePlot extends JavaPlugin {
                 if (worldSection == null) {
                     continue;
                 }
-                String type = worldSection.getString("generator.type", "0");
-                if (!"0".equals(type) && !"NORMAL".equalsIgnoreCase(type)) {
-                    getLogger().warning("世界 " + name + " 使用 PlotSquared 的部分地皮區域 (generator.type=" + type
+                String rawType = worldSection.getString("generator.type", "NORMAL");
+                PlotWorld.AreaType type = PlotWorld.AreaType.parse(rawType);
+                if (type == null || type == PlotWorld.AreaType.PARTIAL) {
+                    getLogger().warning("世界 " + name + " 使用 PlotSquared 的部分地皮區域 (generator.type=" + rawType
                             + ")，YeePlot 不支援，已略過");
                     continue;
                 }
-                worlds.put(name, new PlotWorld(name, worldSection, getLogger()));
+                PlotWorld plotWorld = new PlotWorld(name, worldSection, getLogger());
+                worlds.put(name, plotWorld);
+                if (type == PlotWorld.AreaType.AUGMENTED) {
+                    getLogger().info("世界 " + name + " 是疊加在原本地形上的地皮區域 (AUGMENTED，terrain="
+                            + plotWorld.terrain + ")，YeePlot 只管理地皮，不會修改地形");
+                    if (!"ALL".equals(plotWorld.terrain)) {
+                        getLogger().warning("世界 " + name + " 的 terrain 是 " + plotWorld.terrain
+                                + "，PlotSquared 會在新區塊加上道路或改變地形，YeePlot 不會，新生成的區塊只有世界原本的地形");
+                    }
+                }
                 File roadSchematic = new File(sourceFolder, "schematics/GEN_ROAD_SCHEMATIC/" + name);
                 if (roadSchematic.isDirectory()) {
                     getLogger().warning("世界 " + name + " 有道路模板 (road schematic)，YeePlot 不會套用到新生成的區塊");
@@ -292,6 +302,13 @@ public final class YeePlot extends JavaPlugin {
         for (PlotWorld plotWorld : plotManager.worlds()) {
             String name = plotWorld.name();
             World world = Bukkit.getWorld(name);
+            if (!plotWorld.managesTerrain()) {
+                // AUGMENTED 世界使用世界原本的生成器，交給 Multiverse 等插件載入，YeePlot 不介入
+                if (world == null) {
+                    getLogger().info("地皮世界 " + name + " 尚未載入（AUGMENTED 世界由 Multiverse 等插件負責載入）");
+                }
+                continue;
+            }
             if (world == null) {
                 getLogger().info("載入地皮世界 " + name);
                 world = new WorldCreator(name)

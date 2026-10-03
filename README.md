@@ -45,6 +45,9 @@ Yeemo 伺服器的地皮插件。它是 PlotSquared 的輕量版，只保留地�
 
    沒改的話，已經生成的區塊不受影響，但新生成的區塊會變成一般地形，啟動時後台會提示。
    沒有被其他插件載入的地皮世界，YeePlot 會在啟動後自動用正確的生成器載入。
+
+   **例外：疊加在原本地形上的地皮世界**（worlds.yml 裡有 `generator.type: AUGMENTED`）**生成器不要改**，
+   維持原本的設定（例如原版地形就是空白），詳見[疊加在原本地形上的地皮世界](#疊加在原本地形上的地皮世界)。
 4. 啟動伺服器，後台應該出現「已載入 N 個地皮世界、M 塊地皮」，M 要跟原本的地皮數一致
 5. 權限節點與 PlotSquared 相同，原本的權限組不用修改
 
@@ -198,6 +201,20 @@ Yeemo 伺服器的地皮插件。它是 PlotSquared 的輕量版，只保留地�
 - 被禁止的玩家無法走進或傳送進地皮
 - 可建築高度依 worlds.yml 的 `world.min_height`、`world.max_height`
 
+### 疊加在原本地形上的地皮世界
+
+PlotSquared 的 AUGMENTED 地皮區域（worlds.yml 裡 `generator.type: AUGMENTED`）是在世界原本的地形（例如原版地形）上劃出地皮格線，
+地形本身不由地皮插件產生。YeePlot 支援整個世界都是 AUGMENTED 地皮區域的情況：
+
+- 認領、名單、保護、別名、時間天氣、WorldEdit、Axiom 都照常運作
+- 世界維持原本的生成器，YeePlot 不會替換，也不會自動載入這種世界（交給 Multiverse 等插件）
+- **YeePlot 絕不修改這種世界的地形**：
+  - 認領時不放圍牆半磚
+  - `/plot delete` 只取消認領，地皮上的建築會保留
+  - `/plot clear`、`/plot fixroads` 停用
+  - `/plot merge` 只合併資料，不鋪地板
+- `generator.terrain` 不是 `ALL` 時（例如 `ROAD`），PlotSquared 會在新區塊加上道路，YeePlot 不會，啟動時後台會提示
+
 ### 地皮列表點擊傳送
 
 `/plot list` 與 `/plotlist` 列出的每塊地皮都可以點擊，滑鼠移上去會顯示座標。點自己的地皮會執行 `/plot home 編號`，
@@ -318,7 +335,8 @@ FAWE 另外處理：
 - 拆分合併、L 形合併、合併別人的地皮
 - time、weather 以外的 flag
 - 道路模板與地皮模板（新區塊只會生成經典地形）
-- 部分地皮區域（`generator.type: 2`）、地皮叢集（cluster）、一塊地皮一個世界
+- 部分地皮區域（`generator.type: PARTIAL`，在世界中只劃出部分範圍）、地皮叢集（cluster）、一塊地皮一個世界
+- AUGMENTED 世界的 `terrain: ROAD`、`NONE`、`ORE` 在新區塊產生的道路或地形變化
 - 評分、留言、經濟、Placeholder
 
 **與 PlotSquared 的差異**

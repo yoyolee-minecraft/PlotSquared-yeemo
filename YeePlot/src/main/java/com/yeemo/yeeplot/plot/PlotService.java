@@ -54,6 +54,14 @@ public final class PlotService {
 
     // ---------------------------------------------------------------- 認領與刪除
 
+    /**
+     * 這個世界的地形是否由 YeePlot 管理（AUGMENTED 世界不是，清除與修復道路會停用）。
+     */
+    public boolean managesTerrain(String world) {
+        PlotWorld plotWorld = manager.world(world);
+        return plotWorld != null && plotWorld.managesTerrain();
+    }
+
     public boolean isBusy(String world, PlotId id) {
         return busy.contains(world + ";" + id);
     }
@@ -91,6 +99,14 @@ public final class PlotService {
             manager.remove(member);
             database.deletePlot(member);
         }
+        PlotWorld plotWorld = manager.world(plot.area());
+        if (plotWorld != null && !plotWorld.managesTerrain()) {
+            // AUGMENTED 世界的地形不屬於 YeePlot：只取消認領，不還原地形
+            if (whenDone != null) {
+                whenDone.run();
+            }
+            return;
+        }
         // 往外多一圈：連同外圍圍牆與合併缺口兩端（原版合併時會把外圍圍牆接起來，刪除後要恢復成道路）
         List<int[]> expanded = new ArrayList<>();
         for (int[] rect : rects) {
@@ -120,8 +136,8 @@ public final class PlotService {
     private void startJob(RegenJobs.Job job, Runnable whenDone) {
         World world = Bukkit.getWorld(job.world());
         PlotWorld plotWorld = manager.world(job.world());
-        if (world == null || plotWorld == null) {
-            plugin.getLogger().warning("世界 " + job.world() + " 不存在，放棄地形還原工作");
+        if (world == null || plotWorld == null || !plotWorld.managesTerrain()) {
+            plugin.getLogger().warning("世界 " + job.world() + " 不存在或地形不由 YeePlot 管理，放棄地形還原工作");
             jobs.complete(job);
             if (whenDone != null) {
                 whenDone.run();
@@ -281,7 +297,8 @@ public final class PlotService {
         Plot any = group.iterator().next();
         PlotWorld plotWorld = manager.world(any.area());
         World world = Bukkit.getWorld(any.area());
-        if (plotWorld == null || world == null || !plotWorld.placeTopBlock || plotWorld.roadWidth == 0) {
+        if (plotWorld == null || world == null || !plotWorld.managesTerrain()
+                || !plotWorld.placeTopBlock || plotWorld.roadWidth == 0) {
             return;
         }
         Set<PlotId> ids = new HashSet<>();
@@ -499,6 +516,13 @@ public final class PlotService {
         setWeather(plot, weather);
         setAlias(plot, alias);
 
+        if (!plotWorld.managesTerrain()) {
+            // AUGMENTED 世界只合併資料，不鋪地板、不動圍牆
+            if (whenDone != null) {
+                whenDone.run();
+            }
+            return;
+        }
         List<RegionRegenerator.Column> columns = mergeColumns(plotWorld, bounds, before);
         RegionRegenerator.run(plugin, world, plotWorld, columns, List.of(), entity -> false, blocksPerTick, whenDone);
     }

@@ -603,6 +603,10 @@ public final class PlotCommand implements TabExecutor {
         if (plot == null) {
             return;
         }
+        if (!service().managesTerrain(plot.area())) {
+            messages().send(player, "terrain-not-managed");
+            return;
+        }
         requireConfirm(player, label, () -> {
             if (manager().getPlotAbs(plot.area(), plot.id()) != plot) {
                 messages().send(player, "plot-unowned");
@@ -620,6 +624,9 @@ public final class PlotCommand implements TabExecutor {
         Plot plot = ownedPlotHere(player, "plots.admin.command.delete");
         if (plot == null) {
             return;
+        }
+        if (!service().managesTerrain(plot.area())) {
+            messages().send(player, "delete-keeps-terrain");
         }
         requireConfirm(player, label, () -> {
             if (manager().getPlotAbs(plot.area(), plot.id()) != plot) {
@@ -915,6 +922,10 @@ public final class PlotCommand implements TabExecutor {
         String world = player.getWorld().getName();
         if (!manager().isPlotWorld(world)) {
             messages().send(player, "not-in-plot-world");
+            return;
+        }
+        if (!service().managesTerrain(world)) {
+            messages().send(player, "terrain-not-managed");
             return;
         }
         int max = plugin.fixRoadsMaxRadius();

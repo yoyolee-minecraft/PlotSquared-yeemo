@@ -32,6 +32,11 @@ import org.bukkit.entity.Player;
  */
 public final class WorldEditHook {
 
+    /**
+     * 允許在地皮世界用 WorldEdit 建立展示實體（例如 //paste -e）。
+     */
+    public static final String DISPLAYS = "plots.worldedit.displays";
+
     private final EditAccess access;
     private final Messages messages;
     /**
@@ -68,11 +73,13 @@ public final class WorldEditHook {
             return;
         }
         Player player = Bukkit.getPlayer(actor.getUniqueId());
-        if (player != null && player.hasPermission(EditAccess.BYPASS)) {
-            return;
-        }
-        if (!restrictArea) {
-            event.setExtent(new MaskedExtent(event.getExtent(), null));
+        // 展示實體與範圍限制分開判斷：plots.worldedit.displays 預設沒有人有（包含 OP），需要時再手動給
+        boolean filterDisplays = player == null || !player.hasPermission(DISPLAYS);
+        boolean bypassArea = !restrictArea || player != null && player.hasPermission(EditAccess.BYPASS);
+        if (bypassArea) {
+            if (filterDisplays) {
+                event.setExtent(new MaskedExtent(event.getExtent(), null, true));
+            }
             return;
         }
         EditAccess.EditMask mask = player == null ? null : access.maskFor(player, player.hasPermission(EditAccess.MEMBER));
@@ -83,7 +90,7 @@ public final class WorldEditHook {
             }
             return;
         }
-        event.setExtent(new MaskedExtent(event.getExtent(), mask));
+        event.setExtent(new MaskedExtent(event.getExtent(), mask, filterDisplays));
     }
 
     /**
@@ -99,14 +106,20 @@ public final class WorldEditHook {
         private static final BaseBlock AIR_BASE = AIR.toBaseBlock();
 
         private final EditAccess.EditMask mask;
+        private final boolean filterDisplays;
 
-        private MaskedExtent(Extent extent, EditAccess.EditMask mask) {
+        private MaskedExtent(Extent extent, EditAccess.EditMask mask, boolean filterDisplays) {
             super(extent);
             this.mask = mask;
+            this.filterDisplays = filterDisplays;
         }
 
         private boolean allowed(int x, int y, int z) {
             return mask == null || mask.contains(x, y, z);
+        }
+
+        private boolean blocked(BaseEntity entity) {
+            return filterDisplays && isDisplay(entity);
         }
 
         private static boolean isDisplay(BaseEntity entity) {
@@ -140,7 +153,7 @@ public final class WorldEditHook {
 
         @Override
         public Entity createEntity(Location location, BaseEntity entity) {
-            if (!isDisplay(entity) && allowed(location.getBlockX(), location.getBlockY(), location.getBlockZ())) {
+            if (!blocked(entity) && allowed(location.getBlockX(), location.getBlockY(), location.getBlockZ())) {
                 return super.createEntity(location, entity);
             }
             return null;
@@ -151,7 +164,7 @@ public final class WorldEditHook {
          * FAWE 貼上實體時可能走這個版本，要一起擋。
          */
         public Entity createEntity(Location location, BaseEntity entity, java.util.UUID uuid) {
-            if (!isDisplay(entity) && allowed(location.getBlockX(), location.getBlockY(), location.getBlockZ())) {
+            if (!blocked(entity) && allowed(location.getBlockX(), location.getBlockY(), location.getBlockZ())) {
                 return getExtent().createEntity(location, entity, uuid);
             }
             return null;

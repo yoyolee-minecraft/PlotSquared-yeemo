@@ -33,7 +33,9 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.io.File;
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 
@@ -139,7 +141,9 @@ public final class YeePlot extends JavaPlugin {
             if (fawe != null && fawe.isEnabled()) {
                 FaweHook hook = new FaweHook(editAccess);
                 hook.register();
-                // FAWE 的範圍由遮罩管理器處理；另外掛 EditSession 監聽，貼上時略過展示實體
+                // FAWE 的範圍由遮罩管理器處理；另外掛 EditSession 監聽，貼上時略過展示實體。
+                // FAWE 預設會擋掉第三方 extent，要先加入白名單才會生效
+                FaweHook.allowExtent(WorldEditHook.class.getName());
                 WorldEditHook displayFilter = new WorldEditHook(editAccess, messages, false);
                 displayFilter.register();
                 unregisterHooks = () -> {
@@ -213,8 +217,20 @@ public final class YeePlot extends JavaPlugin {
         }
     }
 
+    /**
+     * 舊版產生的 config.yml 不會自動有新版本的設定，啟動與 reload 時補上。
+     */
+    private void updateConfig() {
+        List<String> updated = ConfigUpdater.update(getConfig());
+        if (!updated.isEmpty()) {
+            saveConfig();
+            getLogger().info("已更新 config.yml，新增或更新：" + String.join(", ", updated));
+        }
+    }
+
     private void loadSettings() {
         reloadConfig();
+        updateConfig();
         FileConfiguration config = getConfig();
         File serverRoot = getDataFolder().getAbsoluteFile().getParentFile().getParentFile();
         String folder = config.getString("data-folder", "plugins/PlotSquared");

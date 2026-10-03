@@ -36,6 +36,9 @@ permissions:
     default: op
   plots.worldedit.member:
     default: false
+  # 允許在地皮世界用 WorldEdit 建立展示實體（例如 //paste -e），預設沒有人有，包含 OP
+  plots.worldedit.displays:
+    default: false
   plots.admin.displaylimit:
     default: op
   plots.permpack.basicflags:

@@ -1,6 +1,7 @@
 package com.yeemo.yeeplot.hook;
 
 import com.fastasyncworldedit.core.FaweAPI;
+import com.fastasyncworldedit.core.configuration.Settings;
 import com.fastasyncworldedit.core.regions.FaweMask;
 import com.fastasyncworldedit.core.regions.FaweMaskManager;
 import com.fastasyncworldedit.core.regions.RegionWrapper;
@@ -32,6 +33,21 @@ public final class FaweHook extends FaweMaskManager {
 
     public void register() {
         FaweAPI.addMaskManager(this);
+    }
+
+    /**
+     * FAWE 會移除不在 config.yml「extent.allowed-plugins」白名單裡的第三方 extent，
+     * 所以要先把 YeePlot 的 extent 加進白名單（只改記憶體中的設定，不寫入 FAWE 的設定檔）。
+     */
+    public static void allowExtent(String classPrefix) {
+        List<String> allowed = new ArrayList<>(Settings.settings().EXTENT.ALLOWED_PLUGINS);
+        for (String entry : allowed) {
+            if (classPrefix.toLowerCase(java.util.Locale.ROOT).contains(entry.toLowerCase(java.util.Locale.ROOT))) {
+                return;
+            }
+        }
+        allowed.add(classPrefix);
+        Settings.settings().EXTENT.ALLOWED_PLUGINS = allowed;
     }
 
     public void unregister() {

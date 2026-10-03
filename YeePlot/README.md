@@ -42,6 +42,12 @@ Yeemo 伺服器的地皮插件，是 PlotSquared 的輕量版，只保留最基�
 YeePlot 使用的資料表結構與 PlotSquared 完全相同（`plot`、`plot_settings`、`plot_helpers`、`plot_trusted`、`plot_denied`），
 寫入的資料 PlotSquared 也能直接讀取。
 
+## 設定檔自動更新
+
+插件不會覆蓋已經存在的 `config.yml`。從舊版升級時，YeePlot 會在啟動與 `/plot reload` 時自動補上缺少的新設定（含註解），
+並把缺少新欄位的 `messages.info`、`messages.help` 換成新版樣板（這兩項自訂過的內容會被覆蓋），其他設定一律保留。
+後台會列出更新了哪些項目。
+
 ## 從 1.0.0（PlotSquaredLite）升級
 
 1.1.0 起插件改名為 YeePlot：
@@ -126,8 +132,10 @@ WorldEdit 與 Axiom 都是直接寫入世界，不會觸發一般的方塊事件
   生成會被取消、調整會被還原。物品展示的大小可以用 config 的 `axiom.item-display-size` 調整
 - 每塊地皮的展示實體數量有上限（config 的 `displays.per-plot`，預設 100，合併群組依塊數累加），
   超過時 Axiom 無法再生成；`plots.admin.displaylimit` 不受限制。`/plot info` 會顯示目前數量
-- WorldEdit／FAWE 在地皮世界貼上時（`//paste -e`）一律不貼展示實體，避免透過變換矩陣畫到地皮外；
-  `plots.worldedit.bypass` 不受限制
+- WorldEdit／FAWE 在地皮世界建立實體時（`//paste -e`、`//stack` 等）一律不建立展示實體，避免透過變換矩陣畫到地皮外。
+  只有 `plots.worldedit.displays` 不受限制，這個權限預設沒有人有（包含 OP），與 `plots.worldedit.bypass` 分開
+- FAWE 預設會擋掉第三方插件的 extent（後台出現「Potentially unsafe extent blocked」），YeePlot 啟動時會自動把自己加入
+  FAWE 的 `extent.allowed-plugins` 白名單（只改記憶體中的設定，不會寫入 FAWE 的設定檔）
 - `axiomadmin.bypass_region_checks` 不受限制
 - 舊版 AxiomPaper 沒有整合介面時，地皮世界中會整個禁止 Axiom 修改，啟動時後台會提示更新
 

@@ -67,6 +67,7 @@ permissions:
       plots.admin.command.setowner: true
       plots.admin.command.sethome: true
       plots.admin.command.reload: true
+      plots.admin.command.fixroads: true
       plots.admin.entry.denied: true
       plots.admin.destroy.unowned: true
       plots.admin.destroy.other: true

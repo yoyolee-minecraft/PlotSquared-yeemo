@@ -5,6 +5,10 @@ import com.plotsquared.lite.world.PlotWorld;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Display;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Hanging;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.BoundingBox;
 
@@ -15,6 +19,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
 
 /**
  * 地皮的高階操作：認領、刪除、清除、名單管理、家園位置。
@@ -25,16 +30,18 @@ public final class PlotService {
     private final Plugin plugin;
     private final PlotManager manager;
     private final Database database;
+    private final RegenJobs jobs;
     /**
      * 正在刪除（地形還原中）的地皮，期間不允許重新認領。
      */
     private final Set<String> busy = new HashSet<>();
     private int blocksPerTick = 40000;
 
-    public PlotService(Plugin plugin, PlotManager manager, Database database) {
+    public PlotService(Plugin plugin, PlotManager manager, Database database, RegenJobs jobs) {
         this.plugin = plugin;
         this.manager = manager;
         this.database = database;
+        this.jobs = jobs;
     }
 
     public void setBlocksPerTick(int blocksPerTick) {
@@ -70,79 +77,139 @@ public final class PlotService {
      * 清除地皮的方塊但保留擁有權。合併群組會一起清除，被合併掉的道路會鋪成地皮地板。
      */
     public void clear(Plot plot, Runnable whenDone) {
-        Set<Plot> group = manager.getConnected(plot);
-        World world = Bukkit.getWorld(plot.area());
-        PlotWorld plotWorld = manager.world(plot.area());
-        if (world == null || plotWorld == null) {
-            if (whenDone != null) {
-                whenDone.run();
-            }
-            return;
-        }
-        RegionRegenerator.run(plugin, world, plotWorld, collectColumns(group, false),
-                entityBoxes(group), blocksPerTick, whenDone);
+        startJob(jobs.add(plot.area(), RegenJobs.Mode.CLEAR, manager.getGroupRects(plot)), whenDone);
     }
 
     /**
-     * 刪除地皮：先從記憶體與資料庫移除，再把地形（包含合併掉的道路）恢復成生成器的樣子。
+     * 刪除地皮：先從記憶體與資料庫移除，再把整個群組範圍（包含合併掉的道路）恢復成生成器的樣子。
      */
     public void delete(Plot plot, Runnable whenDone) {
         Set<Plot> group = manager.getConnected(plot);
-        List<RegionRegenerator.Column> columns = collectColumns(group, true);
-        List<BoundingBox> boxes = entityBoxes(group);
+        List<int[]> rects = manager.getGroupRects(plot);
         setWallTop(group, false);
-        List<String> keys = new ArrayList<>();
         for (Plot member : group) {
             manager.remove(member);
             database.deletePlot(member);
-            String key = member.area() + ";" + member.id();
-            busy.add(key);
-            keys.add(key);
         }
-        Runnable finish = () -> {
-            keys.forEach(busy::remove);
-            if (whenDone != null) {
-                whenDone.run();
-            }
-        };
-        World world = Bukkit.getWorld(plot.area());
-        PlotWorld plotWorld = manager.world(plot.area());
-        if (world == null || plotWorld == null) {
-            finish.run();
-            return;
+        // 往外多一圈：連同外圍圍牆與合併缺口兩端（原版合併時會把外圍圍牆接起來，刪除後要恢復成道路）
+        List<int[]> expanded = new ArrayList<>();
+        for (int[] rect : rects) {
+            expanded.add(new int[]{rect[0] - 1, rect[1] - 1, rect[2] + 1, rect[3] + 1});
         }
-        RegionRegenerator.run(plugin, world, plotWorld, columns, boxes, blocksPerTick, finish);
+        startJob(jobs.add(plot.area(), RegenJobs.Mode.DELETE, expanded), whenDone);
     }
 
     /**
-     * 找出群組佔用的所有欄位（包含合併後被吃掉的道路）。
-     *
-     * @param restoreRoads true 時道路與圍牆照生成器原樣重鋪，false 時一律鋪成地皮地板
+     * 修復道路：把範圍內不屬於任何地皮的道路與圍牆恢復原樣，並移除上面的裝飾實體。
+     * 用來處理原版 PlotSquared 刪除合併地皮後留在道路上的方塊。
      */
-    private List<RegionRegenerator.Column> collectColumns(Set<Plot> group, boolean restoreRoads) {
-        Plot any = group.iterator().next();
-        PlotWorld plotWorld = manager.world(any.area());
-        World world = Bukkit.getWorld(any.area());
-        List<RegionRegenerator.Column> columns = new ArrayList<>();
-        if (plotWorld == null || world == null) {
-            return columns;
+    public void fixRoads(String world, int minX, int minZ, int maxX, int maxZ, Runnable whenDone) {
+        startJob(jobs.add(world, RegenJobs.Mode.FIX_ROADS, List.of(new int[]{minX, minZ, maxX, maxZ})), whenDone);
+    }
+
+    /**
+     * 啟動時接著做上次沒完成的工作。
+     */
+    public void resumeJobs() {
+        for (RegenJobs.Job job : jobs.pending()) {
+            plugin.getLogger().info("接續上次未完成的地形還原：" + job.world() + " " + job.mode());
+            startJob(job, null);
         }
-        Set<PlotId> ids = new HashSet<>();
-        for (Plot plot : group) {
-            ids.add(plot.id());
+    }
+
+    private void startJob(RegenJobs.Job job, Runnable whenDone) {
+        World world = Bukkit.getWorld(job.world());
+        PlotWorld plotWorld = manager.world(job.world());
+        if (world == null || plotWorld == null) {
+            plugin.getLogger().warning("世界 " + job.world() + " 不存在，放棄地形還原工作");
+            jobs.complete(job);
+            if (whenDone != null) {
+                whenDone.run();
+            }
+            return;
         }
-        int[] bounds = bounds(plotWorld, group);
-        Location probe = new Location(world, 0, 0, 0);
-        for (int x = bounds[0]; x <= bounds[2]; x++) {
-            for (int z = bounds[1]; z <= bounds[3]; z++) {
-                probe.setX(x);
-                probe.setZ(z);
-                PlotId id = manager.getPlotId(probe);
-                if (id == null || !ids.contains(id)) {
-                    continue;
+        // 刪除期間不允許重新認領範圍內的地皮
+        List<String> keys = new ArrayList<>();
+        if (job.mode() == RegenJobs.Mode.DELETE) {
+            for (PlotId id : plotIdsIn(plotWorld, job.rects())) {
+                String key = job.world() + ";" + id;
+                if (busy.add(key)) {
+                    keys.add(key);
                 }
-                PlotWorld.CellType type = restoreRoads ? plotWorld.cellType(x, z) : PlotWorld.CellType.PLOT;
-                columns.add(new RegionRegenerator.Column(x, z, type));
+            }
+        }
+        List<RegionRegenerator.Column> columns = collectColumns(world, plotWorld, job);
+        List<BoundingBox> boxes = new ArrayList<>();
+        for (int[] rect : job.rects()) {
+            boxes.add(new BoundingBox(rect[0], world.getMinHeight(), rect[1],
+                    rect[2] + 1, world.getMaxHeight(), rect[3] + 1));
+        }
+        Predicate<Entity> removeEntity = job.mode() == RegenJobs.Mode.FIX_ROADS
+                ? entity -> isDecoration(entity) && manager.getPlotId(entity.getLocation()) == null
+                : entity -> true;
+        RegionRegenerator.run(plugin, world, plotWorld, columns, boxes, removeEntity, blocksPerTick, () -> {
+            keys.forEach(busy::remove);
+            jobs.complete(job);
+            if (whenDone != null) {
+                whenDone.run();
+            }
+        });
+    }
+
+    /**
+     * 修復道路時只移除不會自己移動的裝飾實體，避免誤殺道路上的生物或礦車。
+     */
+    private static boolean isDecoration(Entity entity) {
+        return entity instanceof Hanging || entity instanceof ArmorStand || entity instanceof Display;
+    }
+
+    private static Set<PlotId> plotIdsIn(PlotWorld plotWorld, List<int[]> rects) {
+        Set<PlotId> ids = new HashSet<>();
+        for (int[] rect : rects) {
+            for (int x = rect[0]; x <= rect[2]; x++) {
+                for (int z = rect[1]; z <= rect[3]; z++) {
+                    PlotId id = plotWorld.plotIdAbs(x, z);
+                    if (id != null) {
+                        ids.add(id);
+                    }
+                }
+            }
+        }
+        return ids;
+    }
+
+    private List<RegionRegenerator.Column> collectColumns(World world, PlotWorld plotWorld, RegenJobs.Job job) {
+        List<RegionRegenerator.Column> columns = new ArrayList<>();
+        Set<Long> seen = new HashSet<>();
+        Location probe = new Location(world, 0, 0, 0);
+        for (int[] rect : job.rects()) {
+            for (int x = rect[0]; x <= rect[2]; x++) {
+                for (int z = rect[1]; z <= rect[3]; z++) {
+                    if (!seen.add(((long) x << 32) ^ (z & 0xffffffffL))) {
+                        continue; // 長方形之間可能重疊
+                    }
+                    if (job.mode() == RegenJobs.Mode.CLEAR) {
+                        columns.add(new RegionRegenerator.Column(x, z, PlotWorld.CellType.PLOT));
+                        continue;
+                    }
+                    probe.setX(x);
+                    probe.setZ(z);
+                    if (job.mode() == RegenJobs.Mode.DELETE) {
+                        // 地皮已從記憶體移除；範圍內若有其他仍被認領的格子（例如重啟後接續時），一律不動
+                        if (manager.getPlotAt(probe) != null) {
+                            continue;
+                        }
+                        if (plotWorld.plotIdAbs(x, z) != null) {
+                            columns.add(new RegionRegenerator.Column(x, z, PlotWorld.CellType.PLOT));
+                            continue;
+                        }
+                    } else if (manager.getPlotId(probe) != null) {
+                        continue; // 修復道路：地皮內部（不論是否認領）與合併道路都不動
+                    }
+                    PlotWorld.CellType type = roadCellType(plotWorld, x, z);
+                    boolean claimedWall = type == PlotWorld.CellType.WALL && besideClaimedPlot(world, x, z);
+                    columns.add(new RegionRegenerator.Column(x, z, type, claimedWall));
+                }
             }
         }
         return columns;
@@ -165,20 +232,46 @@ public final class PlotService {
         return new int[]{minX, minZ, maxX, maxZ};
     }
 
-    private List<BoundingBox> entityBoxes(Set<Plot> group) {
-        Plot any = group.iterator().next();
-        PlotWorld plotWorld = manager.world(any.area());
-        List<BoundingBox> boxes = new ArrayList<>();
-        if (plotWorld == null) {
-            return boxes;
+    /**
+     * 不屬於任何地皮的格子應該是道路還是圍牆，考慮相鄰地皮的合併狀態。
+     * <p>
+     * 原版合併地皮時，合併缺口兩端的外圍圍牆會接起來；L 形群組的內角則保留道路、但邊緣是圍牆。
+     * 分別用「忽略被合併的方向」來看：只有一個方向合併就用那個觀點；兩個方向都合併（但斜角沒合併）時，
+     * 任一觀點是圍牆就是圍牆，否則是道路。
+     */
+    private PlotWorld.CellType roadCellType(PlotWorld plotWorld, int x, int z) {
+        int[] raw = plotWorld.rawPlotId(x, z);
+        int hash = raw[2];
+        Plot plot = hash == 0 ? null : manager.getPlotAbs(plotWorld.name(), new PlotId(raw[0], raw[1]));
+        if (plot == null) {
+            return plotWorld.cellType(x, z);
         }
-        for (Plot plot : group) {
-            boxes.add(new BoundingBox(
-                    plotWorld.bottomX(plot.id()), plotWorld.minGenHeight, plotWorld.bottomZ(plot.id()),
-                    plotWorld.topX(plot.id()) + 1, plotWorld.maxBuildHeight, plotWorld.topZ(plot.id()) + 1
-            ));
+        boolean mergedX = (hash & 4) != 0 && plot.isMerged(Direction.EAST) || (hash & 1) != 0 && plot.isMerged(Direction.WEST);
+        boolean mergedZ = (hash & 8) != 0 && plot.isMerged(Direction.NORTH) || (hash & 2) != 0 && plot.isMerged(Direction.SOUTH);
+        if (mergedX && mergedZ) {
+            PlotWorld.CellType eastWest = plotWorld.cellType(x, z, true, false);
+            PlotWorld.CellType northSouth = plotWorld.cellType(x, z, false, true);
+            return eastWest == PlotWorld.CellType.WALL || northSouth == PlotWorld.CellType.WALL
+                    ? PlotWorld.CellType.WALL : PlotWorld.CellType.ROAD;
         }
-        return boxes;
+        return plotWorld.cellType(x, z, mergedX, mergedZ);
+    }
+
+    /**
+     * 圍牆旁邊（含斜角）是否有已認領的地皮（含合併道路），用來決定圍牆頂端要放哪種方塊。
+     */
+    private boolean besideClaimedPlot(World world, int x, int z) {
+        Location probe = new Location(world, 0, 0, 0);
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                probe.setX(x + dx);
+                probe.setZ(z + dz);
+                if (manager.getPlotAt(probe) != null) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

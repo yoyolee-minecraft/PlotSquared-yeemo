@@ -9,6 +9,7 @@ import com.plotsquared.lite.listener.PlotPermissions;
 import com.plotsquared.lite.listener.ProtectionListener;
 import com.plotsquared.lite.plot.PlotManager;
 import com.plotsquared.lite.plot.PlotService;
+import com.plotsquared.lite.plot.RegenJobs;
 import com.plotsquared.lite.storage.Database;
 import com.plotsquared.lite.world.PlotGenerator;
 import com.plotsquared.lite.world.PlotWorld;
@@ -70,7 +71,8 @@ public final class PlotSquaredLite extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        plotService = new PlotService(this, plotManager, database);
+        plotService = new PlotService(this, plotManager, database,
+                new RegenJobs(new File(getDataFolder(), "pending-regen.yml"), getLogger()));
         plotService.setBlocksPerTick(getConfig().getInt("clear.blocks-per-tick", 40000));
         permissions = new PlotPermissions(plotManager);
 
@@ -95,6 +97,7 @@ public final class PlotSquaredLite extends JavaPlugin {
         Bukkit.getScheduler().runTask(this, () -> {
             loadMissingWorlds();
             registerHooks();
+            plotService.resumeJobs();
         });
     }
 
@@ -271,6 +274,10 @@ public final class PlotSquaredLite extends JavaPlugin {
 
     public int maxPlotsPermission() {
         return maxPlotsPermission;
+    }
+
+    public int fixRoadsMaxRadius() {
+        return getConfig().getInt("fix-roads.max-radius", 128);
     }
 
     public boolean teleportOnClaim() {

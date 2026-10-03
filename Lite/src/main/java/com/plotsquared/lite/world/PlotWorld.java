@@ -177,12 +177,22 @@ public final class PlotWorld {
      * 依照 HybridGen 的規則判斷某一欄是地皮、圍牆還是道路。
      */
     public CellType cellType(int x, int z) {
+        return cellType(x, z, false, false);
+    }
+
+    /**
+     * 判斷格子類型，可以忽略某個方向。合併地皮時，被合併方向上的道路與圍牆會變成地皮，
+     * 只剩另一個方向決定這一格是道路還是圍牆（例如合併缺口兩端，外圍圍牆會接起來）。
+     */
+    public CellType cellType(int x, int z, boolean ignoreX, boolean ignoreZ) {
         int rx = relative(x, roadOffsetX);
         int rz = relative(z, roadOffsetZ);
-        if (isRoad(rx) || isRoad(rz)) {
+        boolean roadX = !ignoreX && isRoad(rx);
+        boolean roadZ = !ignoreZ && isRoad(rz);
+        if (roadX || roadZ) {
             return CellType.ROAD;
         }
-        if (isWall(rx) || isWall(rz)) {
+        if (!ignoreX && isWall(rx) || !ignoreZ && isWall(rz)) {
             return CellType.WALL;
         }
         return CellType.PLOT;
@@ -240,6 +250,16 @@ public final class PlotWorld {
      * 某一欄在高度 y 應該生成的方塊，空氣回傳 null。地形生成與清除地皮共用此邏輯。
      */
     public BlockData blockAt(CellType type, int y, Random random) {
+        return blockAt(type, y, random, false);
+    }
+
+    /**
+     * @param claimedWall 圍牆頂端是否使用「已認領」的方塊（wall.block_claimed）
+     */
+    public BlockData blockAt(CellType type, int y, Random random, boolean claimedWall) {
+        if (claimedWall && type == CellType.WALL && placeTopBlock && y == wallHeight + 1) {
+            return claimedWallBlock.pick(random);
+        }
         if (y == minGenHeight && plotBedrock) {
             return bedrock;
         }

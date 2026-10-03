@@ -37,7 +37,7 @@ public final class PlotCommand implements TabExecutor {
     private static final long CONFIRM_TIMEOUT = 20_000L;
     private static final List<String> SUBCOMMANDS = List.of(
             "help", "claim", "auto", "home", "visit", "tp", "info", "list", "trust", "add", "remove",
-            "deny", "undeny", "sethome", "clear", "delete", "setowner", "reload", "confirm"
+            "deny", "undeny", "sethome", "clear", "delete", "setowner", "fixroads", "reload", "confirm"
     );
     private static final Map<String, String> ALIASES = Map.ofEntries(
             Map.entry("c", "claim"), Map.entry("a", "auto"), Map.entry("h", "home"),
@@ -111,6 +111,7 @@ public final class PlotCommand implements TabExecutor {
             case "clear" -> clear(player, label);
             case "delete" -> delete(player, label);
             case "setowner" -> setOwner(player, rest);
+            case "fixroads" -> fixRoads(player, rest, label);
             case "confirm" -> confirm(player);
             default -> messages().send(sender, "help", "label", label);
         }
@@ -600,6 +601,38 @@ public final class PlotCommand implements TabExecutor {
         }
         service().setOwner(plot, uuid);
         messages().send(player, "setowner", "player", args[0]);
+    }
+
+    /**
+     * /plot fixroads [半徑]：把玩家周圍不屬於任何地皮的道路與圍牆恢復原樣。
+     */
+    private void fixRoads(Player player, String[] args, String label) {
+        if (!checkPermission(player, "plots.admin.command.fixroads")) {
+            return;
+        }
+        String world = player.getWorld().getName();
+        if (!manager().isPlotWorld(world)) {
+            messages().send(player, "not-in-plot-world");
+            return;
+        }
+        int max = plugin.fixRoadsMaxRadius();
+        int radius = Math.min(32, max);
+        if (args.length > 0) {
+            if (!isInteger(args[0]) || Integer.parseInt(args[0]) < 1 || Integer.parseInt(args[0]) > max) {
+                messages().send(player, "fixroads-radius", "max", String.valueOf(max));
+                return;
+            }
+            radius = Integer.parseInt(args[0]);
+        }
+        int x = player.getLocation().getBlockX();
+        int z = player.getLocation().getBlockZ();
+        int finalRadius = radius;
+        messages().send(player, "fixroads-warning", "radius", String.valueOf(radius));
+        requireConfirm(player, label, () -> {
+            messages().send(player, "fixroads-start");
+            service().fixRoads(world, x - finalRadius, z - finalRadius, x + finalRadius, z + finalRadius,
+                    () -> messages().send(player, "fixroads-done"));
+        });
     }
 
     private void confirm(Player player) {

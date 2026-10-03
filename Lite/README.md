@@ -80,6 +80,7 @@ PlotSquared 的輕量版，只保留最基礎的地皮功能與權限控制，**
 | `/plot clear` | `plots.clear` | 清除地皮（保留擁有權，需確認） |
 | `/plot delete` | `plots.delete` | 刪除地皮（需確認） |
 | `/plot setowner <玩家>` | `plots.admin.command.setowner` | 變更擁有者 |
+| `/plot fixroads [半徑]` | `plots.admin.command.fixroads` | 把周圍不屬於任何地皮的道路與圍牆恢復原樣（需確認） |
 | `/plot reload` | `plots.admin.command.reload` | 重新載入 config.yml 與 worlds.yml |
 
 管理員繞過權限：`plots.admin.build.{road,unowned,other}`、`plots.admin.destroy.*`、`plots.admin.interact.*`、
@@ -120,9 +121,24 @@ WorldEdit 與 Axiom 都是直接寫入世界，不會觸發一般的方塊事件
 | home、sethome | 以群組的基準地皮（z 最小，其次 x 最小）為準 |
 | info | 顯示合併方向 |
 | clear | 整個群組一起清除，中間的道路鋪成地皮地板，保持合併 |
-| delete | 整個群組一起刪除，道路與圍牆恢復原樣（無法只刪其中一塊） |
+| delete | 整個群組一起刪除，中間道路、外圍圍牆、合併缺口兩端全部恢復原樣，道路上的實體一併清除（無法只刪其中一塊） |
 | WorldEdit／Axiom | 整個群組都可以編輯 |
 | 地皮數量上限 | 與 PlotSquared 相同，合併的每一塊分別計算 |
+
+## 修復原版留下的道路殘留
+
+原版 PlotSquared 刪除合併地皮時，常見道路上殘留方塊。從原始碼看，可能的原因有：
+
+- 重建道路時，只清到 worlds.yml 的 `max_gen_height`，更高的方塊會留下（從舊版本升級的世界常常設成 255）
+- 先把合併狀態解除，再清除地皮，所以清除實體的範圍只有地皮內部，道路上的盔甲架、展示框、畫會留下
+- 地形修改透過非同步佇列執行，伺服器在途中關閉或區塊處理失敗時，就只清了一部分
+
+輕量版的刪除流程已經避開這些問題。已經留下的殘留，管理員可以站到附近執行 `/plot fixroads [半徑]`：
+
+- 只處理「不屬於任何地皮」的道路與圍牆；地皮內部（不論是否認領）與合併道路完全不動
+- 合併地皮外圍接起來的圍牆會保留，圍牆頂端依旁邊地皮是否認領放對應的方塊
+- 只移除道路上的展示框、畫、盔甲架與展示實體，不會誤殺生物或礦車
+- 有道路模板 (road schematic) 的世界，修復後道路會變回經典樣式
 
 ## 建置
 
@@ -136,4 +152,6 @@ WorldEdit 與 Axiom 都是直接寫入世界，不會觸發一般的方塊事件
 
 - PvP：輕量版沒有 flags，改用 `config.yml` 的 `disable-pvp` 統一控制（預設禁止）。
 - 刪除地皮時不會清掉 `plot_comments` 留言資料（PlotSquared 用地皮座標的雜湊值當索引，輕量版沒有留言功能）。
-- 清除與刪除地皮會分散在多個 tick 執行，速度由 `clear.blocks-per-tick` 控制；伺服器在清除途中關閉的話，地形可能只清了一部分。
+- 清除與刪除地皮會分散在多個 tick 執行，速度由 `clear.blocks-per-tick` 控制。未完成的工作記在 `plugins/PlotSquaredLite/pending-regen.yml`，
+  伺服器途中關閉的話，下次啟動會自動接著做完。
+- 每一欄都從世界最低點清到最高點，不受 worlds.yml 的 `max_gen_height` 限制。

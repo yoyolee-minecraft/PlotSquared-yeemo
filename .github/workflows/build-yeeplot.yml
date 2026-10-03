@@ -1,0 +1,49 @@
+name: Build YeePlot
+on:
+  push:
+    paths:
+      - "YeePlot/**"
+      - ".github/workflows/build-yeeplot.yml"
+  pull_request:
+    paths:
+      - "YeePlot/**"
+      - ".github/workflows/build-yeeplot.yml"
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Build
+        run: ./gradlew -p YeePlot build
+      - name: Upload Jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: YeePlot
+          path: YeePlot/build/libs/*.jar
+      # 發佈 Release：版本號取自 YeePlot/build.gradle.kts，該版本還沒有 Release 時才建立（標籤在 GitHub 端建立）
+      - name: Publish Release
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' YeePlot/build.gradle.kts)
+          TAG="yeeplot-v$VERSION"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $TAG 已存在，略過"
+            exit 0
+          fi
+          gh release create "$TAG" YeePlot/build/libs/*.jar \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "YeePlot $VERSION" \
+            --notes-file YeePlot/RELEASE_NOTES.md \
+            --prerelease

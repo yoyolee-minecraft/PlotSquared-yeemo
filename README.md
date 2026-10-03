@@ -75,8 +75,8 @@ Yeemo 伺服器的地皮插件。它是 PlotSquared 的輕量版，只保留地�
 | --- | --- | --- |
 | `/plot claim` | `plots.claim` | 認領腳下的地皮 |
 | `/plot auto` | `plots.auto` | 自動認領離中心最近的空地 |
-| `/plot home [編號\|玩家] [編號]` | `plots.home`；看別人的要 `plots.visit.other` | 傳送到地皮 |
-| `/plot visit <玩家\|別名> [編號]` | `plots.visit.other` | 拜訪別人的地皮；找不到玩家時當成地皮別名 |
+| `/plot home [編號\|玩家] [編號\|別名]` | `plots.home`；看別人的要 `plots.visit.other` | 傳送到地皮 |
+| `/plot visit <玩家\|別名> [編號\|別名]` | `plots.visit.other` | 拜訪別人的地皮；例如 `/plot visit Steve 2`、`/plot visit Steve 城堡`、`/plot visit 城堡` |
 | `/plot list [玩家]`、`/plotlist [玩家]` | `plots.list`；看別人的要 `plots.list.player` | 列出地皮，**點擊即可傳送** |
 | `/plot info` | `plots.info` | 別名、擁有者、名單、合併方向、時間天氣、展示實體數量 |
 | `/plot trust <玩家>` | `plots.trust` | 加入信任者（隨時可以建築） |
@@ -205,7 +205,7 @@ Yeemo 伺服器的地皮插件。它是 PlotSquared 的輕量版，只保留地�
 
 ### 地皮別名
 
-- `/plot alias set <名稱>` 為地皮取名，`/plot visit <名稱>` 就能直接傳送
+- `/plot alias set <名稱>` 為地皮取名，之後用 `/plot visit <名稱>` 或 `/plot visit <玩家> <名稱>` 就能直接傳送
 - `/plot list` 有別名的地皮會顯示別名、沒有的顯示座標（滑鼠移上去仍會顯示座標）；`/plot info` 也會顯示別名
 - 規則與 PlotSquared 相同：一個單字、最多 49 個字、不能是純數字、同一個世界內不能重複（不分大小寫）、不能跟玩家名稱相同
 - 另外禁止 `&` 與色碼字元，避免在訊息中產生格式

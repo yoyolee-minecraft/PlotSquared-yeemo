@@ -18,7 +18,7 @@ public final class ConfigUpdater {
      */
     private static final String[][] TEMPLATES = {
             {"messages.info", "{displays}"},
-            {"messages.help", "/{label} alias"},
+            {"messages.help", "[編號|別名]"},
             {"messages.list-entry", "{name}"}
     };
 

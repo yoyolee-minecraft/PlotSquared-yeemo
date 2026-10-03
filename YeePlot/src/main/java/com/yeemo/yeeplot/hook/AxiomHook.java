@@ -2,6 +2,7 @@ package com.yeemo.yeeplot.hook;
 
 import com.yeemo.yeeplot.Messages;
 import com.yeemo.yeeplot.listener.PlotPermissions;
+import com.yeemo.yeeplot.plot.Plot;
 import com.yeemo.yeeplot.plot.PlotManager;
 import com.yeemo.yeeplot.world.PlotWorld;
 import net.kyori.adventure.text.Component;
@@ -51,17 +52,19 @@ public final class AxiomHook implements Listener {
     private final Messages messages;
     private final Logger logger;
     private final DisplayBounds displayBounds;
+    private final DisplayLimit displayLimit;
     private final Map<UUID, DisplaySnapshot> snapshots = new ConcurrentHashMap<>();
     private boolean fineGrained;
 
     public AxiomHook(Plugin plugin, PlotManager manager, PlotPermissions permissions, Messages messages,
-                     DisplayBounds displayBounds) {
+                     DisplayBounds displayBounds, DisplayLimit displayLimit) {
         this.plugin = plugin;
         this.manager = manager;
         this.permissions = permissions;
         this.messages = messages;
         this.logger = plugin.getLogger();
         this.displayBounds = displayBounds;
+        this.displayLimit = displayLimit;
     }
 
     /**
@@ -253,6 +256,13 @@ public final class AxiomHook implements Listener {
         if (!displayBounds.allowed(player, display)) {
             ((Cancellable) event).setCancelled(true);
             messages.send(player, "axiom-display-outside");
+            return;
+        }
+        // 事件在實體加入世界之後觸發，所以計數已經包含這一個
+        if (!player.hasPermission(DisplayLimit.BYPASS) && displayLimit.exceeds(display)) {
+            ((Cancellable) event).setCancelled(true);
+            Plot plot = manager.getPlotAt(display.getLocation());
+            messages.send(player, "display-limit", "limit", String.valueOf(plot == null ? 0 : displayLimit.limit(plot)));
         }
     }
 

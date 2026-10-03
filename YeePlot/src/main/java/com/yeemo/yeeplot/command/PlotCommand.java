@@ -37,7 +37,7 @@ public final class PlotCommand implements TabExecutor {
     private static final long CONFIRM_TIMEOUT = 20_000L;
     private static final List<String> SUBCOMMANDS = List.of(
             "help", "claim", "auto", "home", "visit", "tp", "info", "list", "trust", "add", "remove",
-            "deny", "undeny", "sethome", "clear", "delete", "setowner", "fixroads", "reload", "confirm"
+            "deny", "undeny", "sethome", "time", "weather", "flag", "merge", "clear", "delete", "setowner", "fixroads", "reload", "confirm"
     );
     private static final Map<String, String> ALIASES = Map.ofEntries(
             Map.entry("c", "claim"), Map.entry("a", "auto"), Map.entry("h", "home"),
@@ -45,7 +45,7 @@ public final class PlotCommand implements TabExecutor {
             Map.entry("r", "remove"), Map.entry("untrust", "remove"), Map.entry("d", "deny"),
             Map.entry("ud", "undeny"), Map.entry("dispose", "delete"), Map.entry("unclaim", "delete"),
             Map.entry("del", "delete"), Map.entry("l", "list"), Map.entry("teleport", "tp"),
-            Map.entry("seth", "sethome"), Map.entry("?", "help")
+            Map.entry("seth", "sethome"), Map.entry("?", "help"), Map.entry("m", "merge"), Map.entry("f", "flag")
     );
 
     private final YeePlot plugin;
@@ -119,6 +119,10 @@ public final class PlotCommand implements TabExecutor {
             case "delete" -> delete(player, label);
             case "setowner" -> setOwner(player, rest);
             case "fixroads" -> fixRoads(player, rest, label);
+            case "time" -> time(player, rest);
+            case "weather" -> weather(player, rest);
+            case "flag" -> flag(player, rest);
+            case "merge" -> merge(player, rest, label);
             case "confirm" -> confirm(player);
             default -> messages().send(sender, "help", "label", label);
         }
@@ -401,7 +405,12 @@ public final class PlotCommand implements TabExecutor {
                 "trusted", names(plot.trusted()),
                 "members", names(plot.members()),
                 "denied", names(plot.denied()),
-                "merged", merged.isEmpty() ? "-" : String.join(", ", merged)
+                "merged", merged.isEmpty() ? "-" : String.join(", ", merged),
+                "time", plot.time() == null ? "-" : String.valueOf(plot.time()),
+                "weather", plot.weather() == null ? "-" : messages().format("weather-" + plot.weather()),
+                "displays", plugin.displayLimit().perPlot() > 0
+                        ? plugin.displayLimit().count(plot) + "/" + plugin.displayLimit().limit(plot)
+                        : String.valueOf(plugin.displayLimit().count(plot))
         );
     }
 
@@ -614,6 +623,202 @@ public final class PlotCommand implements TabExecutor {
         messages().send(player, "setowner", "player", args[0]);
     }
 
+    // ---------------------------------------------------------------- 時間與天氣
+
+    private boolean hasFlagPermission(Player player, String flag) {
+        return player.hasPermission("plots.set.flag." + flag) || player.hasPermission("plots.set.flag." + flag + ".*");
+    }
+
+    /**
+     * /plot time &lt;0~24000|day|noon|night|midnight|reset&gt;
+     */
+    private void time(Player player, String[] args) {
+        if (!hasFlagPermission(player, "time")) {
+            messages().send(player, "no-permission", "permission", "plots.set.flag.time");
+            return;
+        }
+        if (args.length < 1) {
+            messages().send(player, "time-usage");
+            return;
+        }
+        Plot plot = ownedPlotHere(player, "plots.set.flag.other");
+        if (plot == null) {
+            return;
+        }
+        String input = args[0].toLowerCase(Locale.ROOT);
+        Long time = switch (input) {
+            case "reset", "remove", "off" -> null;
+            case "day" -> 1000L;
+            case "noon" -> 6000L;
+            case "night" -> 13000L;
+            case "midnight" -> 18000L;
+            default -> {
+                try {
+                    long value = Long.parseLong(input);
+                    yield value >= 0 && value <= 24000 ? value : -1L;
+                } catch (NumberFormatException e) {
+                    yield -1L;
+                }
+            }
+        };
+        if (time != null && time < 0) {
+            messages().send(player, "time-usage");
+            return;
+        }
+        service().setTime(plot, time);
+        plugin.effects().refreshAll();
+        if (time == null) {
+            messages().send(player, "time-reset");
+        } else {
+            messages().send(player, "time-set", "time", String.valueOf(time));
+        }
+    }
+
+    /**
+     * /plot weather &lt;clear|rain|reset&gt;
+     */
+    private void weather(Player player, String[] args) {
+        if (!hasFlagPermission(player, "weather")) {
+            messages().send(player, "no-permission", "permission", "plots.set.flag.weather");
+            return;
+        }
+        if (args.length < 1) {
+            messages().send(player, "weather-usage");
+            return;
+        }
+        Plot plot = ownedPlotHere(player, "plots.set.flag.other");
+        if (plot == null) {
+            return;
+        }
+        String weather = switch (args[0].toLowerCase(Locale.ROOT)) {
+            case "clear", "sun", "sunny" -> "clear";
+            case "rain", "storm", "downfall" -> "rain";
+            case "reset", "remove", "off" -> null;
+            default -> "?";
+        };
+        if ("?".equals(weather)) {
+            messages().send(player, "weather-usage");
+            return;
+        }
+        service().setWeather(plot, weather);
+        plugin.effects().refreshAll();
+        if (weather == null) {
+            messages().send(player, "weather-reset");
+        } else {
+            messages().send(player, "weather-set", "weather", messages().format("weather-" + weather));
+        }
+    }
+
+    /**
+     * 相容 PlotSquared 的寫法：/plot flag set time 6000、/plot flag remove weather。
+     * 只支援 time 與 weather。
+     */
+    private void flag(Player player, String[] args) {
+        if (args.length >= 2 && (args[1].equalsIgnoreCase("time") || args[1].equalsIgnoreCase("weather"))) {
+            String[] value;
+            if (args[0].equalsIgnoreCase("set") && args.length >= 3) {
+                value = new String[]{args[2]};
+            } else if (args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("delete")) {
+                value = new String[]{"reset"};
+            } else {
+                messages().send(player, "flag-usage");
+                return;
+            }
+            if (args[1].equalsIgnoreCase("time")) {
+                time(player, value);
+            } else {
+                weather(player, value);
+            }
+            return;
+        }
+        messages().send(player, "flag-usage");
+    }
+
+    // ---------------------------------------------------------------- 合併
+
+    private int allowedMergeSize(Player player) {
+        if (player.hasPermission("plots.admin") || player.hasPermission("plots.merge.*")) {
+            return Integer.MAX_VALUE;
+        }
+        for (int i = 64; i > 1; i--) {
+            if (player.hasPermission("plots.merge." + i)) {
+                return i;
+            }
+        }
+        return plugin.mergeDefaultMax();
+    }
+
+    /**
+     * /plot merge [north|east|south|west]：與相鄰的自己的地皮合併，預設是面向的方向。
+     */
+    private void merge(Player player, String[] args, String label) {
+        if (!checkPermission(player, "plots.merge")) {
+            return;
+        }
+        Plot plot = ownedPlotHere(player, "plots.admin.command.merge");
+        if (plot == null) {
+            return;
+        }
+        Direction direction;
+        if (args.length > 0) {
+            direction = switch (args[0].toLowerCase(Locale.ROOT)) {
+                case "north", "n", "北" -> Direction.NORTH;
+                case "east", "e", "東" -> Direction.EAST;
+                case "south", "s", "南" -> Direction.SOUTH;
+                case "west", "w", "西" -> Direction.WEST;
+                default -> null;
+            };
+            if (direction == null) {
+                messages().send(player, "merge-usage");
+                return;
+            }
+        } else {
+            // yaw 0 南、90 西、180 北、270 東
+            int quadrant = Math.floorMod(Math.round(player.getLocation().getYaw() / 90f), 4);
+            direction = switch (quadrant) {
+                case 0 -> Direction.SOUTH;
+                case 1 -> Direction.WEST;
+                case 2 -> Direction.NORTH;
+                default -> Direction.EAST;
+            };
+        }
+        Plot target = service().mergeTarget(plot, direction);
+        int max = allowedMergeSize(player);
+        String directionName = messages().format("direction-" + direction.name().toLowerCase(Locale.ROOT));
+        switch (service().checkMerge(plot, target, max)) {
+            case NO_TARGET -> {
+                messages().send(player, "merge-no-target", "direction", directionName);
+                return;
+            }
+            case DIFFERENT_OWNER -> {
+                messages().send(player, "merge-different-owner", "direction", directionName);
+                return;
+            }
+            case NOT_RECTANGLE -> {
+                messages().send(player, "merge-not-rectangle");
+                return;
+            }
+            case TOO_LARGE -> {
+                messages().send(player, "merge-too-large", "max", String.valueOf(max));
+                return;
+            }
+            default -> {
+            }
+        }
+        messages().send(player, "merge-warning", "direction", directionName, "target", target.id().toString());
+        requireConfirm(player, label, () -> {
+            // 確認期間地皮可能已被刪除或改變，重新檢查一次
+            if (manager().getPlotAbs(plot.area(), plot.id()) != plot
+                    || manager().getPlotAbs(target.area(), target.id()) != target
+                    || service().checkMerge(plot, target, max) != PlotService.MergeCheck.OK) {
+                messages().send(player, "merge-changed");
+                return;
+            }
+            messages().send(player, "merging");
+            service().merge(plot, target, () -> messages().send(player, "merged"));
+        });
+    }
+
     /**
      * /plot fixroads [半徑]：把玩家周圍不屬於任何地皮的道路與圍牆恢復原樣。
      */
@@ -694,12 +899,32 @@ public final class PlotCommand implements TabExecutor {
                 case "sethome" -> {
                     return List.of("reset");
                 }
+                case "time" -> {
+                    return filter(List.of("day", "noon", "night", "midnight", "reset"), args[1]);
+                }
+                case "weather" -> {
+                    return filter(List.of("clear", "rain", "reset"), args[1]);
+                }
+                case "merge" -> {
+                    return filter(List.of("north", "east", "south", "west"), args[1]);
+                }
+                case "flag" -> {
+                    return filter(List.of("set", "remove"), args[1]);
+                }
                 default -> {
                     return List.of();
                 }
             }
         }
+        if (args.length == 3 && args[0].equalsIgnoreCase("flag")) {
+            return filter(List.of("time", "weather"), args[2]);
+        }
         return List.of();
+    }
+
+    private static List<String> filter(List<String> options, String prefix) {
+        String lower = prefix.toLowerCase(Locale.ROOT);
+        return options.stream().filter(option -> option.startsWith(lower)).collect(Collectors.toList());
     }
 
 }

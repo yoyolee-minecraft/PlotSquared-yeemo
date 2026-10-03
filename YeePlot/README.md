@@ -19,9 +19,12 @@ Yeemo 伺服器的地皮插件，是 PlotSquared 的輕量版，只保留最基�
 | WorldEdit／FastAsyncWorldEdit 權限保護 | 支援，規則與 PlotSquared 相同（見下方說明） |
 | Axiom（AxiomPaper）權限保護 | 支援，玩家只能編輯自己有權限的地皮 |
 | 既有的合併地皮 | 可讀取、保護、清除與刪除（整個群組一起處理） |
+| 合併地皮 `/plot merge` | 有限制的版本：只能合併自己相鄰的地皮、合併後必須是長方形、不能拆分 |
+| 地皮時間與天氣 | 支援，沿用 PlotSquared 的 time、weather flag |
+| 展示實體數量上限 | 支援，每塊地皮預設 100 個，合併依塊數累加 |
 | 地皮數量上限 `plots.plot.<數字>` | 支援 |
-| 新的合併 (merge)、拆分 (unlink) | 不支援 |
-| Flags（pvp、greeting 等） | 不支援，但資料庫中的 flags 會原樣保留 |
+| 拆分 (unlink)、L 形合併、合併別人的地皮 | 不支援 |
+| time、weather 以外的 flags（pvp、greeting 等） | 不支援，但資料庫中的 flags 會原樣保留 |
 | 道路模板 (road schematic)、地皮模板 | 不支援，新區塊只會生成經典地形 |
 | 部分地皮區域 (`generator.type: 2`)、地皮叢集 (cluster)、單一世界地皮 | 不支援 |
 | 評分、留言、經濟、Placeholder | 不支援 |
@@ -85,6 +88,10 @@ YeePlot 使用的資料表結構與 PlotSquared 完全相同（`plot`、`plot_se
 | `/plot deny <玩家>` | `plots.deny` | 禁止進入（`*` 代表所有人） |
 | `/plot undeny <玩家>` | `plots.undeny` | 解除禁止 |
 | `/plot sethome [reset]` | `plots.set.home` | 設定家園位置 |
+| `/plot time <0~24000\|day\|noon\|night\|midnight\|reset>` | `plots.set.flag.time` | 設定地皮時間（只影響站在地皮上的玩家看到的時間） |
+| `/plot weather <clear\|rain\|reset>` | `plots.set.flag.weather` | 設定地皮天氣 |
+| `/plot flag set\|remove <time\|weather> [值]` | 同上 | 相容 PlotSquared 的寫法 |
+| `/plot merge [north\|east\|south\|west]` | `plots.merge`、`plots.merge.<數字>` | 與相鄰的自己的地皮合併（需確認），不填方向就用面向的方向 |
 | `/plot clear` | `plots.clear` | 清除地皮（保留擁有權，需確認） |
 | `/plot delete` | `plots.delete` | 刪除地皮（需確認） |
 | `/plot setowner <玩家>` | `plots.admin.command.setowner` | 變更擁有者 |
@@ -117,13 +124,25 @@ WorldEdit 與 Axiom 都是直接寫入世界，不會觸發一般的方塊事件
 - Axiom 生成、移動、刪除實體同樣受地皮權限限制
 - 展示實體（方塊、物品、文字展示）會依變換矩陣（位移、旋轉、縮放）計算實際外觀範圍，外觀超出可建築範圍時，
   生成會被取消、調整會被還原。物品展示的大小可以用 config 的 `axiom.item-display-size` 調整
-- 限制：用 WorldEdit `//paste -e` 貼上的展示實體只檢查位置點，不檢查外觀範圍
+- 每塊地皮的展示實體數量有上限（config 的 `displays.per-plot`，預設 100，合併群組依塊數累加），
+  超過時 Axiom 無法再生成；`plots.admin.displaylimit` 不受限制。`/plot info` 會顯示目前數量
+- WorldEdit／FAWE 在地皮世界貼上時（`//paste -e`）一律不貼展示實體，避免透過變換矩陣畫到地皮外；
+  `plots.worldedit.bypass` 不受限制
 - `axiomadmin.bypass_region_checks` 不受限制
 - 舊版 AxiomPaper 沒有整合介面時，地皮世界中會整個禁止 Axiom 修改，啟動時後台會提示更新
 
 ## 合併地皮
 
-YeePlot 不能建立新的合併，但 PlotSquared 已經合併好的地皮會完整沿用：
+PlotSquared 已經合併好的地皮會完整沿用；新的合併使用 `/plot merge`，規則如下：
+
+- 只能合併同一個擁有者、相鄰的地皮（管理員 `plots.admin.command.merge` 可以替別人合併，但兩邊仍須是同一個擁有者）
+- 合併後必須是完整的長方形，不能做 L 形
+- 群組大小上限：`plots.merge.<數字>`（`plots.permpack.basic` 內含 `plots.merge.4`），沒有數字權限時用 config 的 `merge.default-max-plots`
+- 信任者、成員、禁止名單取聯集；時間與天氣沿用執行指令那一邊的設定
+- 只把這次新併入的道路鋪成地皮地板，外圍圍牆接起來；已經合併過的道路上的建築不會被動到
+- 不提供拆分，要拆就整組刪除
+
+既有與新的合併地皮都依下表處理：
 
 | 操作 | 行為 |
 | --- | --- |

@@ -36,9 +36,19 @@ permissions:
     default: op
   plots.worldedit.member:
     default: false
+  plots.admin.displaylimit:
+    default: op
+  plots.permpack.basicflags:
+    default: false
+    children:
+      plots.set.flag.time: true
+      plots.set.flag.weather: true
+      plots.set.flag.weather.*: true
   plots.permpack.basic:
     default: false
     children:
+      plots.merge: true
+      plots.merge.4: true
       plots.use: true
       plots.info: true
       plots.claim: true
@@ -72,6 +82,9 @@ permissions:
       plots.admin.command.sethome: true
       plots.admin.command.reload: true
       plots.admin.command.fixroads: true
+      plots.admin.command.merge: true
+      plots.admin.displaylimit: true
+      plots.set.flag.other: true
       plots.admin.entry.denied: true
       plots.admin.destroy.unowned: true
       plots.admin.destroy.other: true

@@ -193,6 +193,30 @@ public final class Database {
             loadUsers(statement, "plot_helpers", byId, Plot::trusted);
             loadUsers(statement, "plot_trusted", byId, Plot::members);
             loadUsers(statement, "plot_denied", byId, Plot::denied);
+            // 只讀 YeePlot 有用到的 flag；其他 flag 原樣留在資料庫，換回 PlotSquared 時仍然有效
+            try (ResultSet rs = statement.executeQuery(
+                    "SELECT `plot_id`, `flag`, `value` FROM " + table("plot_flags")
+                            + " WHERE `flag` IN ('time', 'weather')")) {
+                while (rs.next()) {
+                    Plot plot = byId.get(rs.getInt("plot_id"));
+                    String value = rs.getString("value");
+                    if (plot == null || value == null) {
+                        continue;
+                    }
+                    if ("time".equals(rs.getString("flag"))) {
+                        try {
+                            plot.time(Long.parseLong(value.trim()));
+                        } catch (NumberFormatException ignored) {
+                            // 格式錯誤就當作沒設定
+                        }
+                    } else {
+                        String weather = value.trim().toLowerCase(java.util.Locale.ROOT);
+                        if (weather.equals("clear") || weather.equals("rain")) {
+                            plot.weather(weather);
+                        }
+                    }
+                }
+            }
             try (ResultSet rs = statement.executeQuery(
                     "SELECT `plot_plot_id`, `alias`, `merged`, `position` FROM " + table("plot_settings"))) {
                 while (rs.next()) {
@@ -371,6 +395,55 @@ public final class Database {
                 statement.setString(1, value);
                 statement.setInt(2, plot.dbId());
                 statement.executeUpdate();
+            }
+        });
+    }
+
+    /**
+     * 設定 flag（與 PlotSquared 的 plot_flags 表相同格式），value 為 null 代表移除。
+     */
+    public void setFlag(Plot plot, String flag, String value) {
+        submit("設定 flag " + flag + " " + plot, () -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM " + table("plot_flags") + " WHERE `plot_id` = ? AND `flag` = ?")) {
+                statement.setInt(1, plot.dbId());
+                statement.setString(2, flag);
+                statement.executeUpdate();
+            }
+            if (value == null) {
+                return;
+            }
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "INSERT INTO " + table("plot_flags") + "(`plot_id`, `flag`, `value`) VALUES(?, ?, ?)")) {
+                statement.setInt(1, plot.dbId());
+                statement.setString(2, flag);
+                statement.setString(3, value);
+                statement.executeUpdate();
+            }
+        });
+    }
+
+    /**
+     * 寫入合併狀態（plot_settings.merged，PlotSquared 的 4 位元格式）。
+     */
+    public void setMerged(Plot plot) {
+        final int hash = plot.mergedHash();
+        submit("設定合併 " + plot, () -> {
+            int updated;
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE " + table("plot_settings") + " SET `merged` = ? WHERE `plot_plot_id` = ?")) {
+                statement.setInt(1, hash);
+                statement.setInt(2, plot.dbId());
+                updated = statement.executeUpdate();
+            }
+            if (updated == 0) {
+                // 舊資料可能沒有 plot_settings 這一列
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "INSERT INTO " + table("plot_settings") + "(`plot_plot_id`, `merged`) VALUES(?, ?)")) {
+                    statement.setInt(1, plot.dbId());
+                    statement.setInt(2, hash);
+                    statement.executeUpdate();
+                }
             }
         });
     }

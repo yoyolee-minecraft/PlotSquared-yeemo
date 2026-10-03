@@ -2,6 +2,12 @@ Yeemo 伺服器的地皮插件（PlotSquared 的輕量版），直接讀寫 Plot
 
 > ⚠️ 這是預覽版本，尚未在正式伺服器上長時間運作。請先在測試服使用備份資料測試，再上線。
 
+## 1.2.0 更新內容
+- 新增 `/plot time`、`/plot weather`（也相容 `/plot flag set time|weather`），沿用 PlotSquared 的 time、weather flag
+- 新增有限制的 `/plot merge`：只能合併自己相鄰的地皮、合併後必須是長方形、不能拆分
+- 每塊地皮的展示實體數量上限（預設 100，合併依塊數累加），`/plot info` 顯示目前數量
+- WorldEdit／FAWE 在地皮世界貼上時不貼展示實體
+
 ## 1.1.0 更新內容
 - 插件改名為 **YeePlot**，訊息前綴改為「[Yeemo小幫手]」
 - Axiom 展示實體不能再透過位移或縮放畫到地皮外（超出時取消生成、還原調整）
@@ -32,4 +38,4 @@ Yeemo 伺服器的地皮插件（PlotSquared 的輕量版），直接讀寫 Plot
 權限節點與 PlotSquared 相同。完整說明見 [YeePlot/README.md](https://github.com/yoyolee-minecraft/PlotSquared-yeemo/blob/main/YeePlot/README.md)。
 
 ## 不支援
-新的合併與拆分、flags（資料庫中的 flags 會原樣保留）、道路與地皮模板、部分地皮區域（generator.type 2）、叢集、評分、留言、經濟。
+拆分合併、L 形合併、time 與 weather 以外的 flags（資料庫中的 flags 會原樣保留）、道路與地皮模板、部分地皮區域（generator.type 2）、叢集、評分、留言、經濟。

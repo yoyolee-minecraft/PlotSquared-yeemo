@@ -3,9 +3,11 @@ package com.yeemo.yeeplot;
 import com.yeemo.yeeplot.command.PlotCommand;
 import com.yeemo.yeeplot.hook.AxiomHook;
 import com.yeemo.yeeplot.hook.DisplayBounds;
+import com.yeemo.yeeplot.hook.DisplayLimit;
 import com.yeemo.yeeplot.hook.EditAccess;
 import com.yeemo.yeeplot.hook.FaweHook;
 import com.yeemo.yeeplot.hook.WorldEditHook;
+import com.yeemo.yeeplot.listener.PlotEffectsListener;
 import com.yeemo.yeeplot.listener.PlotPermissions;
 import com.yeemo.yeeplot.listener.ProtectionListener;
 import com.yeemo.yeeplot.plot.PlotManager;
@@ -53,6 +55,8 @@ public final class YeePlot extends JavaPlugin {
     private int maxPlotsPermission;
     private boolean teleportOnClaim;
     private Runnable unregisterHooks;
+    private DisplayLimit displayLimit;
+    private PlotEffectsListener effects;
 
     @Override
     public void onLoad() {
@@ -82,6 +86,9 @@ public final class YeePlot extends JavaPlugin {
                 new ProtectionListener(plotManager, permissions, messages, getConfig().getBoolean("disable-pvp", true)),
                 this
         );
+        displayLimit = new DisplayLimit(plotManager, getConfig().getInt("displays.per-plot", 100));
+        effects = new PlotEffectsListener(this, plotManager);
+        getServer().getPluginManager().registerEvents(effects, this);
         PlotCommand command = new PlotCommand(this);
         for (String name : new String[]{"plots", "plotlist"}) {
             PluginCommand pluginCommand = getCommand(name);
@@ -132,10 +139,16 @@ public final class YeePlot extends JavaPlugin {
             if (fawe != null && fawe.isEnabled()) {
                 FaweHook hook = new FaweHook(editAccess);
                 hook.register();
-                unregisterHooks = hook::unregister;
+                // FAWE 的範圍由遮罩管理器處理；另外掛 EditSession 監聽，貼上時略過展示實體
+                WorldEditHook displayFilter = new WorldEditHook(editAccess, messages, false);
+                displayFilter.register();
+                unregisterHooks = () -> {
+                    hook.unregister();
+                    displayFilter.unregister();
+                };
                 getLogger().info("已接上 FastAsyncWorldEdit：玩家只能編輯自己所在且有權限的地皮");
             } else if (worldEdit != null && worldEdit.isEnabled()) {
-                WorldEditHook hook = new WorldEditHook(editAccess, messages);
+                WorldEditHook hook = new WorldEditHook(editAccess, messages, true);
                 hook.register();
                 unregisterHooks = hook::unregister;
                 getLogger().info("已接上 WorldEdit：玩家只能編輯自己所在且有權限的地皮");
@@ -148,7 +161,7 @@ public final class YeePlot extends JavaPlugin {
         if (axiom != null) {
             DisplayBounds displayBounds = new DisplayBounds(plotManager, permissions);
             displayBounds.setItemSize((float) getConfig().getDouble("axiom.item-display-size", 1.0));
-            new AxiomHook(this, plotManager, permissions, messages, displayBounds).register(axiom);
+            new AxiomHook(this, plotManager, permissions, messages, displayBounds, displayLimit).register(axiom);
         }
     }
 
@@ -285,6 +298,9 @@ public final class YeePlot extends JavaPlugin {
         if (plotService != null) {
             plotService.setBlocksPerTick(getConfig().getInt("clear.blocks-per-tick", 40000));
         }
+        if (displayLimit != null) {
+            displayLimit.setPerPlot(getConfig().getInt("displays.per-plot", 100));
+        }
     }
 
     // ---------------------------------------------------------------- 存取器
@@ -311,6 +327,21 @@ public final class YeePlot extends JavaPlugin {
 
     public int maxPlotsPermission() {
         return maxPlotsPermission;
+    }
+
+    public DisplayLimit displayLimit() {
+        return displayLimit;
+    }
+
+    public PlotEffectsListener effects() {
+        return effects;
+    }
+
+    /**
+     * 沒有 plots.merge.<數字> 權限時，合併群組最多幾塊地皮。
+     */
+    public int mergeDefaultMax() {
+        return getConfig().getInt("merge.default-max-plots", 4);
     }
 
     public int fixRoadsMaxRadius() {

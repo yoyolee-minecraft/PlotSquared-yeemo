@@ -32,6 +32,14 @@ public final class Plot {
     private long timestamp;
     private String alias;
     private String position;
+    /**
+     * PlotSquared 的 time flag（玩家看到的時間，0~24000），null 代表沒設定。
+     */
+    private volatile Long time;
+    /**
+     * PlotSquared 的 weather flag：clear 或 rain，null 代表沒設定。
+     */
+    private volatile String weather;
 
     public Plot(String area, PlotId id, UUID owner, long timestamp) {
         this.area = area;
@@ -106,6 +114,22 @@ public final class Plot {
 
     public void position(String position) {
         this.position = position;
+    }
+
+    public Long time() {
+        return time;
+    }
+
+    public void time(Long time) {
+        this.time = time;
+    }
+
+    public String weather() {
+        return weather;
+    }
+
+    public void weather(String weather) {
+        this.weather = weather;
     }
 
     public boolean isOwner(UUID uuid) {

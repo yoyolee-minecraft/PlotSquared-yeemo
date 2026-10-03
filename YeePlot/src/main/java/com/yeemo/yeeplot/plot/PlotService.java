@@ -318,6 +318,223 @@ public final class PlotService {
         }
     }
 
+    // ---------------------------------------------------------------- 時間與天氣
+
+    /**
+     * 設定整個合併群組的時間（null 代表移除），存成 PlotSquared 的 time flag。
+     */
+    public void setTime(Plot plot, Long time) {
+        for (Plot member : manager.getConnected(plot)) {
+            member.time(time);
+            database.setFlag(member, "time", time == null ? null : String.valueOf(time));
+        }
+    }
+
+    /**
+     * 設定整個合併群組的天氣（clear、rain，null 代表移除），存成 PlotSquared 的 weather flag。
+     */
+    public void setWeather(Plot plot, String weather) {
+        for (Plot member : manager.getConnected(plot)) {
+            member.weather(weather);
+            database.setFlag(member, "weather", weather == null ? null : weather.toUpperCase(Locale.ROOT));
+        }
+    }
+
+    // ---------------------------------------------------------------- 合併
+
+    public enum MergeCheck {
+        OK, NO_TARGET, DIFFERENT_OWNER, NOT_RECTANGLE, TOO_LARGE
+    }
+
+    /**
+     * 合併的目標：從 plot 所在群組往 direction 走，第一塊不在群組裡的地皮。
+     */
+    public Plot mergeTarget(Plot plot, Direction direction) {
+        Set<PlotId> group = new HashSet<>();
+        for (Plot member : manager.getConnected(plot)) {
+            group.add(member.id());
+        }
+        PlotId id = plot.id();
+        while (group.contains(id)) {
+            id = id.relative(direction);
+        }
+        return manager.getPlotAbs(plot.area(), id);
+    }
+
+    /**
+     * 檢查能不能合併：目標必須是同一個擁有者的地皮，合併後必須是完整的長方形，總塊數不超過上限。
+     */
+    public MergeCheck checkMerge(Plot plot, Plot target, int maxPlots) {
+        if (target == null) {
+            return MergeCheck.NO_TARGET;
+        }
+        if (plot.owner() == null || !plot.owner().equals(target.owner())) {
+            return MergeCheck.DIFFERENT_OWNER;
+        }
+        Set<PlotId> ids = mergedIds(plot, target);
+        int minX = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (PlotId id : ids) {
+            minX = Math.min(minX, id.x());
+            minZ = Math.min(minZ, id.z());
+            maxX = Math.max(maxX, id.x());
+            maxZ = Math.max(maxZ, id.z());
+        }
+        if ((long) (maxX - minX + 1) * (maxZ - minZ + 1) != ids.size()) {
+            return MergeCheck.NOT_RECTANGLE;
+        }
+        if (ids.size() > maxPlots) {
+            return MergeCheck.TOO_LARGE;
+        }
+        return MergeCheck.OK;
+    }
+
+    private Set<PlotId> mergedIds(Plot plot, Plot target) {
+        Set<PlotId> ids = new HashSet<>();
+        for (Plot member : manager.getConnected(plot)) {
+            ids.add(member.id());
+        }
+        for (Plot member : manager.getConnected(target)) {
+            ids.add(member.id());
+        }
+        return ids;
+    }
+
+    /**
+     * 合併兩個群組（呼叫前必須先通過 checkMerge）。
+     * <ul>
+     *     <li>長方形內所有相鄰的地皮互相合併，寫入資料庫</li>
+     *     <li>名單合併：信任者、成員、禁止名單取聯集；時間與天氣沿用 plot 所在群組的設定</li>
+     *     <li>地形：只把這次新併入的道路與圍牆鋪成地皮地板，外圍圍牆接起來；已經合併過的道路不動</li>
+     * </ul>
+     */
+    public void merge(Plot plot, Plot target, Runnable whenDone) {
+        World world = Bukkit.getWorld(plot.area());
+        PlotWorld plotWorld = manager.world(plot.area());
+        Set<PlotId> ids = mergedIds(plot, target);
+        List<Plot> plots = new ArrayList<>();
+        for (PlotId id : ids) {
+            plots.add(manager.getPlotAbs(plot.area(), id));
+        }
+        Long time = plot.time();
+        String weather = plot.weather();
+
+        // 合併前就屬於這些地皮的格子（地皮內部與已合併的道路），這些格子不會被重鋪
+        int[] bounds = idBounds(plotWorld, ids);
+        Set<Long> before = coveredColumns(world, ids, bounds);
+
+        // 合併狀態
+        for (Plot member : plots) {
+            for (Direction direction : Direction.values()) {
+                if (ids.contains(member.id().relative(direction))) {
+                    member.merged()[direction.index()] = true;
+                }
+            }
+            database.setMerged(member);
+        }
+
+        // 名單取聯集（優先順序與 addUser 相同：信任者 > 成員 > 禁止）
+        Set<UUID> trusted = new HashSet<>();
+        Set<UUID> members = new HashSet<>();
+        Set<UUID> denied = new HashSet<>();
+        for (Plot member : plots) {
+            trusted.addAll(member.trusted());
+            members.addAll(member.members());
+            denied.addAll(member.denied());
+        }
+        members.removeAll(trusted);
+        denied.removeAll(trusted);
+        denied.removeAll(members);
+        for (Plot member : plots) {
+            syncUsers(member, Database.UserTable.TRUSTED, trusted);
+            syncUsers(member, Database.UserTable.MEMBER, members);
+            syncUsers(member, Database.UserTable.DENIED, denied);
+        }
+        setTime(plot, time);
+        setWeather(plot, weather);
+
+        List<RegionRegenerator.Column> columns = mergeColumns(plotWorld, bounds, before);
+        RegionRegenerator.run(plugin, world, plotWorld, columns, List.of(), entity -> false, blocksPerTick, whenDone);
+    }
+
+    /**
+     * 一組地皮座標涵蓋的方塊範圍 {minX, minZ, maxX, maxZ}（地皮內部加上中間的道路）。
+     */
+    static int[] idBounds(PlotWorld plotWorld, Set<PlotId> ids) {
+        int minX = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (PlotId id : ids) {
+            minX = Math.min(minX, plotWorld.bottomX(id));
+            minZ = Math.min(minZ, plotWorld.bottomZ(id));
+            maxX = Math.max(maxX, plotWorld.topX(id));
+            maxZ = Math.max(maxZ, plotWorld.topZ(id));
+        }
+        return new int[]{minX, minZ, maxX, maxZ};
+    }
+
+    /**
+     * 範圍內目前屬於這些地皮的格子。
+     */
+    Set<Long> coveredColumns(World world, Set<PlotId> ids, int[] bounds) {
+        Set<Long> covered = new HashSet<>();
+        Location probe = new Location(world, 0, 0, 0);
+        for (int x = bounds[0]; x <= bounds[2]; x++) {
+            for (int z = bounds[1]; z <= bounds[3]; z++) {
+                probe.setX(x);
+                probe.setZ(z);
+                PlotId id = manager.getPlotId(probe);
+                if (id != null && ids.contains(id)) {
+                    covered.add(columnKey(x, z));
+                }
+            }
+        }
+        return covered;
+    }
+
+    /**
+     * 合併後要重鋪的格子（合併狀態更新後呼叫）：
+     * 範圍內原本不屬於地皮的格子鋪成地皮地板；外圍一圈依合併狀態應該是圍牆的格子，鋪成已認領的圍牆（合併缺口兩端接起來）。
+     */
+    List<RegionRegenerator.Column> mergeColumns(PlotWorld plotWorld, int[] bounds, Set<Long> before) {
+        List<RegionRegenerator.Column> columns = new ArrayList<>();
+        for (int x = bounds[0] - 1; x <= bounds[2] + 1; x++) {
+            for (int z = bounds[1] - 1; z <= bounds[3] + 1; z++) {
+                boolean ring = x < bounds[0] || x > bounds[2] || z < bounds[1] || z > bounds[3];
+                if (!ring) {
+                    if (!before.contains(columnKey(x, z))) {
+                        columns.add(new RegionRegenerator.Column(x, z, PlotWorld.CellType.PLOT));
+                    }
+                } else if (roadCellType(plotWorld, x, z) == PlotWorld.CellType.WALL) {
+                    columns.add(new RegionRegenerator.Column(x, z, PlotWorld.CellType.WALL, true));
+                }
+            }
+        }
+        return columns;
+    }
+
+    private void syncUsers(Plot plot, Database.UserTable table, Set<UUID> wanted) {
+        Set<UUID> current = set(plot, table);
+        for (UUID uuid : new ArrayList<>(current)) {
+            if (!wanted.contains(uuid)) {
+                current.remove(uuid);
+                database.removeUser(plot, table, uuid);
+            }
+        }
+        for (UUID uuid : wanted) {
+            if (current.add(uuid)) {
+                database.addUser(plot, table, uuid);
+            }
+        }
+    }
+
+    private static long columnKey(int x, int z) {
+        return ((long) x << 32) ^ (z & 0xffffffffL);
+    }
+
     // ---------------------------------------------------------------- 名單
 
     /**

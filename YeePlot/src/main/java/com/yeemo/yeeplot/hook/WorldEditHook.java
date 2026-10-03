@@ -34,10 +34,15 @@ public final class WorldEditHook {
 
     private final EditAccess access;
     private final Messages messages;
+    /**
+     * false 時（使用 FAWE）不做範圍遮罩，範圍交給 {@link FaweHook}，這裡只負責擋掉展示實體。
+     */
+    private final boolean restrictArea;
 
-    public WorldEditHook(EditAccess access, Messages messages) {
+    public WorldEditHook(EditAccess access, Messages messages, boolean restrictArea) {
         this.access = access;
         this.messages = messages;
+        this.restrictArea = restrictArea;
     }
 
     public void register() {
@@ -66,6 +71,10 @@ public final class WorldEditHook {
         if (player != null && player.hasPermission(EditAccess.BYPASS)) {
             return;
         }
+        if (!restrictArea) {
+            event.setExtent(new MaskedExtent(event.getExtent(), null));
+            return;
+        }
         EditAccess.EditMask mask = player == null ? null : access.maskFor(player, player.hasPermission(EditAccess.MEMBER));
         if (mask == null || !mask.world().equals(world.getName())) {
             event.setExtent(new NullExtent());
@@ -79,6 +88,8 @@ public final class WorldEditHook {
 
     /**
      * 只允許在可編輯範圍內讀寫；範圍外讀到的一律是空氣，避免複製別人的建築。
+     * 另外一律不建立展示實體：展示實體可以透過變換矩陣畫到範圍外，貼上（//paste -e）時直接略過。
+     * mask 為 null 時（FAWE）只擋展示實體，不限制範圍。
      * 刻意使用 getBlockX() 等舊方法：WorldEdit 7.2 沒有新的 x()，舊方法在 7.2 與 7.3 都存在。
      */
     @SuppressWarnings("removal")
@@ -94,34 +105,54 @@ public final class WorldEditHook {
             this.mask = mask;
         }
 
+        private boolean allowed(int x, int y, int z) {
+            return mask == null || mask.contains(x, y, z);
+        }
+
+        private static boolean isDisplay(BaseEntity entity) {
+            String id = entity.getType().getId();
+            return id.endsWith("block_display") || id.endsWith("item_display") || id.endsWith("text_display");
+        }
+
         @Override
         public <T extends BlockStateHolder<T>> boolean setBlock(BlockVector3 location, T block) throws WorldEditException {
-            return mask.contains(location.getBlockX(), location.getBlockY(), location.getBlockZ())
+            return allowed(location.getBlockX(), location.getBlockY(), location.getBlockZ())
                     && super.setBlock(location, block);
         }
 
         @Override
         public BlockState getBlock(BlockVector3 location) {
-            return mask.contains(location.getBlockX(), location.getBlockY(), location.getBlockZ())
+            return allowed(location.getBlockX(), location.getBlockY(), location.getBlockZ())
                     ? super.getBlock(location) : AIR;
         }
 
         @Override
         public BaseBlock getFullBlock(BlockVector3 location) {
-            return mask.contains(location.getBlockX(), location.getBlockY(), location.getBlockZ())
+            return allowed(location.getBlockX(), location.getBlockY(), location.getBlockZ())
                     ? super.getFullBlock(location) : AIR_BASE;
         }
 
         @Override
         public boolean setBiome(BlockVector3 position, BiomeType biome) {
-            return mask.contains(position.getBlockX(), position.getBlockY(), position.getBlockZ())
+            return allowed(position.getBlockX(), position.getBlockY(), position.getBlockZ())
                     && super.setBiome(position, biome);
         }
 
         @Override
         public Entity createEntity(Location location, BaseEntity entity) {
-            if (mask.contains(location.getBlockX(), location.getBlockY(), location.getBlockZ())) {
+            if (!isDisplay(entity) && allowed(location.getBlockX(), location.getBlockY(), location.getBlockZ())) {
                 return super.createEntity(location, entity);
+            }
+            return null;
+        }
+
+        /**
+         * FAWE 額外的多載（一般版 WorldEdit 沒有這個方法，所以不加 @Override）。
+         * FAWE 貼上實體時可能走這個版本，要一起擋。
+         */
+        public Entity createEntity(Location location, BaseEntity entity, java.util.UUID uuid) {
+            if (!isDisplay(entity) && allowed(location.getBlockX(), location.getBlockY(), location.getBlockZ())) {
+                return getExtent().createEntity(location, entity, uuid);
             }
             return null;
         }

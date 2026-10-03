@@ -24,6 +24,15 @@ fix-roads:
   # /plot fixroads 允許的最大半徑（方塊數）
   max-radius: 128
 
+displays:
+  # 每塊地皮最多幾個展示實體（方塊、物品、文字展示），合併群組依塊數累加；0 代表不限制。
+  # 目前限制 Axiom 生成；WorldEdit 貼上時一律不貼展示實體。擁有 plots.admin.displaylimit 不受限制
+  per-plot: 100
+
+merge:
+  # 沒有 plots.merge.<數字> 權限時，合併群組最多幾塊地皮
+  default-max-plots: 4
+
 axiom:
   # 檢查 Axiom 展示實體外觀範圍時，物品展示的外形大小（格）。
   # 一般物品是 1；伺服器資源包有超大自訂模型的話可以調高（最大約 3）
@@ -79,6 +88,29 @@ messages:
   build-denied: "&c你不能在這裡建築"
   build-height: "&c超出可建築的高度範圍"
   worldedit-denied: "&c你只能在自己的地皮內使用 WorldEdit（站在地皮上再試一次）"
+  display-limit: "&c這塊地皮的展示實體已達上限（{limit} 個）"
+  time-usage: "&c用法：/plot time <0~24000|day|noon|night|midnight|reset>"
+  time-set: "&a地皮時間已設為 &f{time}"
+  time-reset: "&a已移除地皮時間設定"
+  weather-usage: "&c用法：/plot weather <clear|rain|reset>"
+  weather-set: "&a地皮天氣已設為 &f{weather}"
+  weather-reset: "&a已移除地皮天氣設定"
+  weather-clear: "晴天"
+  weather-rain: "雨天"
+  flag-usage: "&cYeePlot 只支援 time 與 weather：/plot flag set <time|weather> <值>、/plot flag remove <time|weather>"
+  merge-usage: "&c用法：/plot merge [north|east|south|west]，不填方向就使用你面向的方向"
+  merge-no-target: "&c{direction}邊沒有已認領的地皮可以合併"
+  merge-different-owner: "&c{direction}邊的地皮不是同一個擁有者，無法合併"
+  merge-not-rectangle: "&c合併後必須是完整的長方形"
+  merge-too-large: "&c合併後超過上限（最多 {max} 塊地皮）"
+  merge-warning: "&e將與{direction}邊的地皮 &f{target} &e合併，中間的道路會變成地皮。合併後無法拆分，只能整組刪除"
+  merge-changed: "&c地皮狀態已改變，請重新執行合併"
+  merging: "&7正在合併地皮，請稍候..."
+  merged: "&a地皮合併完成"
+  direction-north: "北"
+  direction-east: "東"
+  direction-south: "南"
+  direction-west: "西"
   axiom-display-outside: "&c展示實體的外觀超出你可以建築的範圍，已取消這次變更"
   axiom-denied: "&c這個版本的 AxiomPaper 不支援地皮權限，地皮世界中無法使用 Axiom 編輯"
   list-header: "&6{player} 的地皮（{amount}）："
@@ -92,6 +124,8 @@ messages:
     &7成員：&f{members}
     &7禁止：&f{denied}
     &7合併：&f{merged}
+    &7時間：&f{time}  &7天氣：&f{weather}
+    &7展示實體：&f{displays}
   help: |-
     &6YeePlot 指令
     &f/{label} claim &7認領腳下的地皮
@@ -107,6 +141,9 @@ messages:
     &f/{label} deny <玩家> &7禁止進入
     &f/{label} undeny <玩家> &7解除禁止
     &f/{label} sethome [reset] &7設定家園位置
+    &f/{label} time <時間|reset> &7設定地皮時間
+    &f/{label} weather <clear|rain|reset> &7設定地皮天氣
+    &f/{label} merge [方向] &7與相鄰的自己的地皮合併
     &f/{label} clear &7清除地皮（保留擁有權）
     &f/{label} delete &7刪除地皮並清除
     &f/{label} setowner <玩家> &7變更擁有者（管理員）

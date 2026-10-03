@@ -40,7 +40,7 @@ Yeemo 伺服器的地皮插件（PlotSquared 的輕量版），直接讀寫 Plot
 3. bukkit.yml 或 Multiverse 中的地皮世界生成器，從 `PlotSquared` 改成 `YeePlot`
 4. 啟動伺服器，後台應出現「已載入 N 個地皮世界、M 塊地皮」
 
-權限節點與 PlotSquared 相同。完整說明見 [YeePlot/README.md](https://github.com/yoyolee-minecraft/PlotSquared-yeemo/blob/main/YeePlot/README.md)。
+權限節點與 PlotSquared 相同。完整說明見 [README](https://github.com/yoyolee-minecraft/PlotSquared-yeemo#readme)。
 
 ## 不支援
 拆分合併、L 形合併、time 與 weather 以外的 flags（資料庫中的 flags 會原樣保留）、道路與地皮模板、部分地皮區域（generator.type 2）、叢集、評分、留言、經濟。

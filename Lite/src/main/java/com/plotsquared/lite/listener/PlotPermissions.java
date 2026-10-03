@@ -43,26 +43,34 @@ public final class PlotPermissions {
         if (world == null) {
             return Result.ALLOW;
         }
-        PlotId id = manager.getPlotId(location);
-        if (id == null) {
-            return player.hasPermission(action.node + ".road") ? Result.ALLOW : Result.DENY;
-        }
-        Plot plot = manager.getPlotAbs(world.name(), id);
-        if (plot == null) {
-            return player.hasPermission(action.node + ".unowned") ? Result.ALLOW : Result.DENY;
-        }
-        boolean added = plot.isAdded(player.getUniqueId(), manager.isOwnerOnline(plot));
-        if (!added && !player.hasPermission(action.node + ".other")) {
+        if (!checkColumn(player, location, action)) {
             return Result.DENY;
         }
-        if (action != Action.INTERACT) {
-            int y = location.getBlockY();
-            if ((y < world.minBuildHeight || y >= world.maxBuildHeight)
-                    && !player.hasPermission("plots.admin.build.heightlimit")) {
-                return Result.HEIGHT;
-            }
+        if (action != Action.INTERACT && !inBuildHeight(player, world, location.getBlockY())) {
+            return Result.HEIGHT;
         }
         return Result.ALLOW;
+    }
+
+    /**
+     * 只判斷平面位置（道路、未認領、別人的地皮），不檢查高度。Axiom 逐區段檢查時使用。
+     */
+    public boolean checkColumn(Player player, Location location, Action action) {
+        PlotId id = manager.getPlotId(location);
+        if (id == null) {
+            return player.hasPermission(action.node + ".road");
+        }
+        Plot plot = manager.getPlotAbs(location.getWorld().getName(), id);
+        if (plot == null) {
+            return player.hasPermission(action.node + ".unowned");
+        }
+        return plot.isAdded(player.getUniqueId(), manager.isOwnerOnline(plot))
+                || player.hasPermission(action.node + ".other");
+    }
+
+    public boolean inBuildHeight(Player player, PlotWorld world, int y) {
+        return y >= world.minBuildHeight && y < world.maxBuildHeight
+                || player.hasPermission("plots.admin.build.heightlimit");
     }
 
     public boolean canEnter(Player player, Plot plot) {

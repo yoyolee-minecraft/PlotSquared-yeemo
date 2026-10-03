@@ -1,8 +1,8 @@
 package com.plotsquared.lite.plot;
 
-import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 一塊已被認領的地皮。欄位對應 PlotSquared 的資料表：
@@ -12,7 +12,7 @@ import java.util.UUID;
  *     <li>denied：plot_denied 表，禁止進入</li>
  * </ul>
  * 表名與意義錯位是 PlotSquared 的歷史包袱，這裡照原樣保留以確保資料互通。
- * 所有欄位只在主執行緒修改。
+ * 所有欄位只在主執行緒修改；WorldEdit 與 Axiom 的檢查可能在其他執行緒讀取，所以名單使用執行緒安全的集合。
  */
 public final class Plot {
 
@@ -23,12 +23,12 @@ public final class Plot {
 
     private final String area;
     private final PlotId id;
-    private final Set<UUID> trusted = new HashSet<>();
-    private final Set<UUID> members = new HashSet<>();
-    private final Set<UUID> denied = new HashSet<>();
+    private final Set<UUID> trusted = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> members = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> denied = ConcurrentHashMap.newKeySet();
     private final boolean[] merged = new boolean[4];
     private volatile int dbId = -1;
-    private UUID owner;
+    private volatile UUID owner;
     private long timestamp;
     private String alias;
     private String position;

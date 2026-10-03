@@ -16,6 +16,8 @@ PlotSquared 的輕量版，只保留最基礎的地皮功能與權限控制，**
 | 信任者 (trust)、成員 (add)、禁止 (deny) | 支援，規則與 PlotSquared 相同 |
 | 家園位置、拜訪其他玩家 | 支援 |
 | 建築／破壞／互動保護、液體與活塞跨界、爆炸保護 | 支援 |
+| WorldEdit／FastAsyncWorldEdit 權限保護 | 支援，規則與 PlotSquared 相同（見下方說明） |
+| Axiom（AxiomPaper）權限保護 | 支援，玩家只能編輯自己有權限的地皮 |
 | 既有的合併地皮 | 可讀取、保護、清除與刪除（整個群組一起處理） |
 | 地皮數量上限 `plots.plot.<數字>` | 支援 |
 | 新的合併 (merge)、拆分 (unlink) | 不支援 |
@@ -82,6 +84,45 @@ PlotSquared 的輕量版，只保留最基礎的地皮功能與權限控制，**
 
 管理員繞過權限：`plots.admin.build.{road,unowned,other}`、`plots.admin.destroy.*`、`plots.admin.interact.*`、
 `plots.admin.entry.denied`、`plots.admin.build.heightlimit`、`plots.admin.command.*`，全部包含在 `plots.admin` 裡。
+
+## WorldEdit 與 Axiom
+
+WorldEdit 與 Axiom 都是直接寫入世界，不會觸發一般的方塊事件，所以輕量版另外接上它們的介面。
+三者都是選用的，沒安裝就不會載入對應的程式碼。
+
+**WorldEdit／FastAsyncWorldEdit**（規則與 PlotSquared 相同）
+
+- 只能編輯「目前站著」的那塊地皮；站在道路上時沿用上一次所在的地皮
+- 合併地皮整個群組都可以編輯，包含被合併掉的道路
+- 擁有者與信任者 (trust) 可以使用；成員 (add) 需要 `plots.worldedit.member`，且擁有者要在線
+- 高度限制在 worlds.yml 的可建築範圍內；範圍外的方塊讀起來是空氣，無法複製別人的建築
+- `plots.worldedit.bypass` 不受限制（預設給 OP）
+- 地皮世界以外的世界不受影響
+- FAWE：以 `PlotSquared` 為名稱註冊區域遮罩，玩家需要的權限仍是 `fawe.plotsquared`（FAWE 預設給所有人），
+  `fawe.bypass.regions` 一樣可以繞過
+
+**Axiom**
+
+- 需要 AxiomPaper 提供的外部整合介面（新版本都有）。玩家可以在自己是擁有者、信任者，或擁有者在線時的成員的地皮上使用 Axiom，
+  道路與別人的地皮會被擋下（管理員權限 `plots.admin.build.*` 照樣有效）
+- Axiom 生成、移動、刪除實體同樣受地皮權限限制
+- `axiomadmin.bypass_region_checks` 不受限制
+- 舊版 AxiomPaper 沒有整合介面時，地皮世界中會整個禁止 Axiom 修改，啟動時後台會提示更新
+
+## 合併地皮
+
+輕量版不能建立新的合併，但 PlotSquared 已經合併好的地皮會完整沿用：
+
+| 操作 | 行為 |
+| --- | --- |
+| 保護 | 合併群組內被吃掉的道路與十字路口算地皮的一部分，與 PlotSquared 相同 |
+| trust／add／deny／remove、setowner | 套用到群組內每一塊 |
+| home、sethome | 以群組的基準地皮（z 最小，其次 x 最小）為準 |
+| info | 顯示合併方向 |
+| clear | 整個群組一起清除，中間的道路鋪成地皮地板，保持合併 |
+| delete | 整個群組一起刪除，道路與圍牆恢復原樣（無法只刪其中一塊） |
+| WorldEdit／Axiom | 整個群組都可以編輯 |
+| 地皮數量上限 | 與 PlotSquared 相同，合併的每一塊分別計算 |
 
 ## 建置
 

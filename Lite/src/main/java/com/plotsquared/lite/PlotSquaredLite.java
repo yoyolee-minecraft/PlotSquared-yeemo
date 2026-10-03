@@ -1,6 +1,10 @@
 package com.plotsquared.lite;
 
 import com.plotsquared.lite.command.PlotCommand;
+import com.plotsquared.lite.hook.AxiomHook;
+import com.plotsquared.lite.hook.EditAccess;
+import com.plotsquared.lite.hook.FaweHook;
+import com.plotsquared.lite.hook.WorldEditHook;
 import com.plotsquared.lite.listener.PlotPermissions;
 import com.plotsquared.lite.listener.ProtectionListener;
 import com.plotsquared.lite.plot.PlotManager;
@@ -15,7 +19,11 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -42,6 +50,7 @@ public final class PlotSquaredLite extends JavaPlugin {
     private boolean globalLimit;
     private int maxPlotsPermission;
     private boolean teleportOnClaim;
+    private Runnable unregisterHooks;
 
     @Override
     public void onLoad() {
@@ -82,14 +91,55 @@ public final class PlotSquaredLite extends JavaPlugin {
         }
         getLogger().info("已載入 " + plotManager.worlds().size() + " 個地皮世界、" + total + " 塊地皮");
 
-        // 等伺服器載入完預設世界後，再補載 worlds.yml 中尚未載入的地皮世界
-        Bukkit.getScheduler().runTask(this, this::loadMissingWorlds);
+        // 等伺服器載入完預設世界、其他插件都啟用後，再補載地皮世界並接上 WorldEdit / Axiom
+        Bukkit.getScheduler().runTask(this, () -> {
+            loadMissingWorlds();
+            registerHooks();
+        });
     }
 
     @Override
     public void onDisable() {
+        if (unregisterHooks != null) {
+            unregisterHooks.run();
+        }
         if (database != null) {
             database.close();
+        }
+    }
+
+    // ---------------------------------------------------------------- WorldEdit / FAWE / Axiom
+
+    private void registerHooks() {
+        EditAccess editAccess = new EditAccess(plotManager);
+        getServer().getPluginManager().registerEvents(new Listener() {
+            @EventHandler
+            public void onQuit(PlayerQuitEvent event) {
+                editAccess.forget(event.getPlayer().getUniqueId());
+            }
+        }, this);
+
+        Plugin fawe = getServer().getPluginManager().getPlugin("FastAsyncWorldEdit");
+        Plugin worldEdit = getServer().getPluginManager().getPlugin("WorldEdit");
+        try {
+            if (fawe != null && fawe.isEnabled()) {
+                FaweHook hook = new FaweHook(editAccess);
+                hook.register();
+                unregisterHooks = hook::unregister;
+                getLogger().info("已接上 FastAsyncWorldEdit：玩家只能編輯自己所在且有權限的地皮");
+            } else if (worldEdit != null && worldEdit.isEnabled()) {
+                WorldEditHook hook = new WorldEditHook(editAccess, messages);
+                hook.register();
+                unregisterHooks = hook::unregister;
+                getLogger().info("已接上 WorldEdit：玩家只能編輯自己所在且有權限的地皮");
+            }
+        } catch (LinkageError e) {
+            getLogger().log(Level.SEVERE, "無法接上 WorldEdit，地皮世界中的 WorldEdit 編輯不受保護！", e);
+        }
+
+        Plugin axiom = AxiomHook.findAxiom(getServer().getPluginManager().getPlugins());
+        if (axiom != null) {
+            new AxiomHook(this, plotManager, permissions, messages).register(axiom);
         }
     }
 

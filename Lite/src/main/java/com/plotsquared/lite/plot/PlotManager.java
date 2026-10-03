@@ -10,16 +10,17 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
- * 記憶體中的地皮索引。地皮資料只在主執行緒存取；世界設定另外允許生成器執行緒讀取。
+ * 記憶體中的地皮索引。只在主執行緒修改；生成器、WorldEdit、Axiom 可能在其他執行緒讀取，
+ * 所以使用執行緒安全的集合（讀到的可能是稍舊的資料，但不會損壞）。
  */
 public final class PlotManager {
 
@@ -27,7 +28,7 @@ public final class PlotManager {
      * 不可變的快照，整份替換；生成器會在非主執行緒讀取這份資料。
      */
     private volatile Map<String, PlotWorld> worlds = Map.of();
-    private final Map<String, Map<PlotId, Plot>> plots = new HashMap<>();
+    private final Map<String, Map<PlotId, Plot>> plots = new ConcurrentHashMap<>();
 
     public void setWorlds(Map<String, PlotWorld> newWorlds) {
         worlds = Map.copyOf(newWorlds);
@@ -35,7 +36,7 @@ public final class PlotManager {
 
     public void setPlots(Map<String, Map<PlotId, Plot>> loaded) {
         plots.clear();
-        loaded.forEach((world, map) -> plots.put(world, new HashMap<>(map)));
+        loaded.forEach((world, map) -> plots.put(world, new ConcurrentHashMap<>(map)));
     }
 
     public PlotWorld world(String name) {
@@ -59,7 +60,7 @@ public final class PlotManager {
     }
 
     public void add(Plot plot) {
-        plots.computeIfAbsent(plot.area(), k -> new HashMap<>()).put(plot.id(), plot);
+        plots.computeIfAbsent(plot.area(), k -> new ConcurrentHashMap<>()).put(plot.id(), plot);
     }
 
     public void remove(Plot plot) {
@@ -154,6 +155,38 @@ public final class PlotManager {
             }
         }
         return result;
+    }
+
+    /**
+     * 合併群組實際佔用的平面範圍（包含被合併掉的道路），以多個長方形 {minX, minZ, maxX, maxZ} 表示。
+     * 群組可能是 L 形，所以每塊地皮各自往東、往南延伸，十字路口只在四塊都合併時才加入。
+     */
+    public List<int[]> getGroupRects(Plot plot) {
+        PlotWorld world = worlds.get(plot.area());
+        List<int[]> rects = new ArrayList<>();
+        if (world == null) {
+            return rects;
+        }
+        for (Plot member : getConnected(plot)) {
+            PlotId id = member.id();
+            int minX = world.bottomX(id);
+            int minZ = world.bottomZ(id);
+            int maxX = world.topX(id);
+            int maxZ = world.topZ(id);
+            int eastX = member.isMerged(Direction.EAST) ? world.bottomX(id.relative(Direction.EAST)) - 1 : maxX;
+            int southZ = member.isMerged(Direction.SOUTH) ? world.bottomZ(id.relative(Direction.SOUTH)) - 1 : maxZ;
+            rects.add(new int[]{minX, minZ, eastX, maxZ});
+            if (southZ != maxZ) {
+                rects.add(new int[]{minX, minZ, maxX, southZ});
+            }
+            if (eastX != maxX && southZ != maxZ && isMergedDiagonal(member, Direction.EAST, Direction.SOUTH)) {
+                rects.add(new int[]{maxX + 1, maxZ + 1, eastX, southZ});
+            }
+        }
+        // 固定順序，讓同一個群組不論從哪塊地皮查詢都得到相同結果
+        rects.sort(Comparator.<int[]>comparingInt(r -> r[0]).thenComparingInt(r -> r[1])
+                .thenComparingInt(r -> r[2]).thenComparingInt(r -> r[3]));
+        return rects;
     }
 
     /**

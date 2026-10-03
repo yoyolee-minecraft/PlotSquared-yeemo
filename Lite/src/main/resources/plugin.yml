@@ -4,6 +4,7 @@ version: "${version}"
 api-version: "1.21"
 load: STARTUP
 description: "PlotSquared 輕量版：地皮生成、認領與權限控制，直接沿用 PlotSquared 的資料"
+softdepend: [ WorldEdit, FastAsyncWorldEdit, AxiomPaper ]
 loadbefore: [ Multiverse-Core, MultiWorld ]
 commands:
   plots:
@@ -27,6 +28,10 @@ permissions:
     default: op
   plots.admin.pvp:
     default: op
+  plots.worldedit.bypass:
+    default: op
+  plots.worldedit.member:
+    default: false
   plots.permpack.basic:
     default: false
     children:

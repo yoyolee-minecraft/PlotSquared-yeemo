@@ -65,6 +65,8 @@ messages:
   invalid-id: "&c無效的地皮座標，格式為 x;z"
   build-denied: "&c你不能在這裡建築"
   build-height: "&c超出可建築的高度範圍"
+  worldedit-denied: "&c你只能在自己的地皮內使用 WorldEdit（站在地皮上再試一次）"
+  axiom-denied: "&c這個版本的 AxiomPaper 不支援地皮權限，地皮世界中無法使用 Axiom 編輯"
   list-header: "&6{player} 的地皮（{amount}）："
   list-entry: "&7#{index} &f{world};{id} {alias}"
   info: |-

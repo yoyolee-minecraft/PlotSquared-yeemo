@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "com.yeemo"
-version = "1.2.1"
+version = "1.3.1"
 
 repositories {
     mavenCentral()

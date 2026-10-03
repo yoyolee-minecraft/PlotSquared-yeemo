@@ -424,6 +424,30 @@ public final class Database {
     }
 
     /**
+     * 寫入別名（plot_settings.alias）；與 PlotSquared 相同，移除時存成空字串。
+     */
+    public void setAlias(Plot plot, String alias) {
+        final String value = alias == null ? "" : alias;
+        submit("設定別名 " + plot, () -> {
+            int updated;
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE " + table("plot_settings") + " SET `alias` = ? WHERE `plot_plot_id` = ?")) {
+                statement.setString(1, value);
+                statement.setInt(2, plot.dbId());
+                updated = statement.executeUpdate();
+            }
+            if (updated == 0) {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "INSERT INTO " + table("plot_settings") + "(`plot_plot_id`, `alias`) VALUES(?, ?)")) {
+                    statement.setInt(1, plot.dbId());
+                    statement.setString(2, value);
+                    statement.executeUpdate();
+                }
+            }
+        });
+    }
+
+    /**
      * 寫入合併狀態（plot_settings.merged，PlotSquared 的 4 位元格式）。
      */
     public void setMerged(Plot plot) {

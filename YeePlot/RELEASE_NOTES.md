@@ -2,6 +2,15 @@ Yeemo 伺服器的地皮插件（PlotSquared 的輕量版），直接讀寫 Plot
 
 > ⚠️ 這是預覽版本，尚未在正式伺服器上長時間運作。請先在測試服使用備份資料測試，再上線。
 
+## 1.3.1 更新內容
+- `/plot list` 有別名的地皮優先顯示別名，沒有別名才顯示座標；滑鼠移上去仍會顯示座標
+- 舊版 `config.yml` 的 `messages.list-entry` 會自動更新成新版樣板
+
+## 1.3.0 更新內容
+- 新增 `/plot alias set <名稱>`、`/plot alias remove`，規則與 PlotSquared 相同；`/plot visit <別名>` 可以直接傳送
+- 合併時沿用別名
+- 移除用不到的原版 PlotSquared workflow
+
 ## 1.2.1 修正
 - 修正 FAWE 仍會貼上展示實體（`//paste -e`、`//stack`）：FAWE 會擋掉不在白名單的第三方 extent，現在啟動時自動加入白名單
 - WorldEdit 建立展示實體改用獨立權限 `plots.worldedit.displays`（預設沒有人有，包含 OP）

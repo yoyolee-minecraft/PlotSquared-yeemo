@@ -37,7 +37,7 @@ public final class PlotCommand implements TabExecutor {
     private static final long CONFIRM_TIMEOUT = 20_000L;
     private static final List<String> SUBCOMMANDS = List.of(
             "help", "claim", "auto", "home", "visit", "tp", "info", "list", "trust", "add", "remove",
-            "deny", "undeny", "sethome", "time", "weather", "flag", "merge", "clear", "delete", "setowner", "fixroads", "reload", "confirm"
+            "deny", "undeny", "sethome", "alias", "time", "weather", "flag", "merge", "clear", "delete", "setowner", "fixroads", "reload", "confirm"
     );
     private static final Map<String, String> ALIASES = Map.ofEntries(
             Map.entry("c", "claim"), Map.entry("a", "auto"), Map.entry("h", "home"),
@@ -119,6 +119,7 @@ public final class PlotCommand implements TabExecutor {
             case "delete" -> delete(player, label);
             case "setowner" -> setOwner(player, rest);
             case "fixroads" -> fixRoads(player, rest, label);
+            case "alias" -> alias(player, rest);
             case "time" -> time(player, rest);
             case "weather" -> weather(player, rest);
             case "flag" -> flag(player, rest);
@@ -315,7 +316,16 @@ public final class PlotCommand implements TabExecutor {
             targetName = args[next];
             next++;
             if (target == null) {
-                messages().send(player, "player-not-found", "player", targetName);
+                // 與 PlotSquared 相同：找不到玩家時，當成地皮別名
+                Plot aliased = manager().findByAlias(targetName, null);
+                if (aliased == null) {
+                    messages().send(player, "player-not-found", "player", targetName);
+                    return;
+                }
+                if (!checkPermission(player, aliased.isOwner(player.getUniqueId()) ? "plots.home" : "plots.visit.other")) {
+                    return;
+                }
+                teleport(player, aliased);
                 return;
             }
         } else if (visit) {
@@ -442,8 +452,11 @@ public final class PlotCommand implements TabExecutor {
             int index = i + 1;
             // 點擊後執行 home／visit，所以照樣會檢查傳送權限與禁止進入
             String click = self ? "/plot home " + index : "/plot visit " + targetName + " " + index;
+            // 有別名就優先顯示別名，沒有的話顯示座標；滑鼠移上去仍會顯示座標
+            String coordinates = plot.area() + ";" + plot.id();
             messages().sendClickable(player, "list-entry", "list-hover", click,
                     "index", String.valueOf(index),
+                    "name", plot.alias() != null ? plot.alias() : coordinates,
                     "world", plot.area(),
                     "id", plot.id().toString(),
                     "alias", plot.alias() == null ? "" : plot.alias());
@@ -621,6 +634,63 @@ public final class PlotCommand implements TabExecutor {
         }
         service().setOwner(plot, uuid);
         messages().send(player, "setowner", "player", args[0]);
+    }
+
+    // ---------------------------------------------------------------- 別名
+
+    /**
+     * /plot alias set &lt;名稱&gt;、/plot alias remove（與 PlotSquared 相同）。
+     */
+    private void alias(Player player, String[] args) {
+        if (args.length == 0 || !args[0].equalsIgnoreCase("set") && !args[0].equalsIgnoreCase("remove")) {
+            messages().send(player, "alias-usage");
+            return;
+        }
+        boolean set = args[0].equalsIgnoreCase("set");
+        if (!checkPermission(player, set ? "plots.alias.set" : "plots.alias.remove")) {
+            return;
+        }
+        Plot plot = ownedPlotHere(player, set ? "plots.admin.alias.set" : "plots.admin.alias.remove");
+        if (plot == null) {
+            return;
+        }
+        if (!set) {
+            service().setAlias(plot, null);
+            messages().send(player, "alias-removed");
+            return;
+        }
+        if (args.length != 2) {
+            messages().send(player, "alias-usage");
+            return;
+        }
+        String alias = args[1];
+        switch (service().checkAlias(plot, alias)) {
+            case EMPTY -> {
+                messages().send(player, "alias-usage");
+                return;
+            }
+            case TOO_LONG -> {
+                messages().send(player, "alias-too-long");
+                return;
+            }
+            case NUMBER, INVALID_CHARACTER -> {
+                messages().send(player, "alias-invalid");
+                return;
+            }
+            case TAKEN -> {
+                messages().send(player, "alias-taken", "alias", alias);
+                return;
+            }
+            default -> {
+            }
+        }
+        // 不能跟玩家名稱相同，否則 /plot visit 會分不清楚
+        if (Bukkit.getPlayerExact(alias) != null || Bukkit.getOfflinePlayerIfCached(alias) != null) {
+            messages().send(player, "alias-taken", "alias", alias);
+            return;
+        }
+        service().setAlias(plot, alias);
+        messages().send(player, "alias-set", "alias", alias);
     }
 
     // ---------------------------------------------------------------- 時間與天氣
@@ -898,6 +968,9 @@ public final class PlotCommand implements TabExecutor {
                 }
                 case "sethome" -> {
                     return List.of("reset");
+                }
+                case "alias" -> {
+                    return filter(List.of("set", "remove"), args[1]);
                 }
                 case "time" -> {
                     return filter(List.of("day", "noon", "night", "midnight", "reset"), args[1]);

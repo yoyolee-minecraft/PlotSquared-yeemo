@@ -100,8 +100,11 @@ public final class Plot {
         return merged[0] || merged[1] || merged[2] || merged[3];
     }
 
+    /**
+     * @return 別名；沒有設定時是 null（資料庫中的空字串也視為沒有設定）
+     */
     public String alias() {
-        return alias;
+        return alias == null || alias.isEmpty() ? null : alias;
     }
 
     public void alias(String alias) {

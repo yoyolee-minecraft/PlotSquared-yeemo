@@ -452,8 +452,11 @@ public final class PlotCommand implements TabExecutor {
             int index = i + 1;
             // 點擊後執行 home／visit，所以照樣會檢查傳送權限與禁止進入
             String click = self ? "/plot home " + index : "/plot visit " + targetName + " " + index;
+            // 有別名就優先顯示別名，沒有的話顯示座標；滑鼠移上去仍會顯示座標
+            String coordinates = plot.area() + ";" + plot.id();
             messages().sendClickable(player, "list-entry", "list-hover", click,
                     "index", String.valueOf(index),
+                    "name", plot.alias() != null ? plot.alias() : coordinates,
                     "world", plot.area(),
                     "id", plot.id().toString(),
                     "alias", plot.alias() == null ? "" : plot.alias());

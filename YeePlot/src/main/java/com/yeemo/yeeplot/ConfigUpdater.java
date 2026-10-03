@@ -14,10 +14,12 @@ public final class ConfigUpdater {
 
     /**
      * {設定路徑, 新版樣板一定會有的內容}；舊樣板沒有這段內容時換成新版（自訂過的內容會被覆蓋）。
+     * 例如 1.3.1 起列表優先顯示別名，舊的 list-entry 樣板沒有 {name}，會換成新版。
      */
     private static final String[][] TEMPLATES = {
             {"messages.info", "{displays}"},
-            {"messages.help", "/{label} alias"}
+            {"messages.help", "/{label} alias"},
+            {"messages.list-entry", "{name}"}
     };
 
     private ConfigUpdater() {

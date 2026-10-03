@@ -120,7 +120,8 @@ messages:
   axiom-display-outside: "&c展示實體的外觀超出你可以建築的範圍，已取消這次變更"
   axiom-denied: "&c這個版本的 AxiomPaper 不支援地皮權限，地皮世界中無法使用 Axiom 編輯"
   list-header: "&6{player} 的地皮（{amount}）："
-  list-entry: "&7#{index} &b&n{world};{id}&r &f{alias}"
+  # {name} 有別名時是別名，沒有時是座標；也可以用 {alias}、{world}、{id}
+  list-entry: "&7#{index} &b&n{name}"
   list-hover: "&e點擊傳送到 {world};{id}"
   info: |-
     &6地皮資訊 &f{world};{id}

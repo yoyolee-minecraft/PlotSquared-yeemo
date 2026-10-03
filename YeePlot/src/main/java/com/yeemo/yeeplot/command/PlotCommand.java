@@ -332,8 +332,14 @@ public final class PlotCommand implements TabExecutor {
             messages().send(player, "player-not-found", "player", args.length > 0 ? args[0] : "?");
             return;
         }
-        if (args.length > next && isInteger(args[next])) {
-            index = Integer.parseInt(args[next]);
+        String aliasArg = null;
+        if (args.length > next) {
+            if (isInteger(args[next])) {
+                index = Integer.parseInt(args[next]);
+            } else {
+                // /plot visit <玩家> <別名>：第二個參數不是數字時，在這個玩家的地皮裡找別名
+                aliasArg = args[next];
+            }
         }
         boolean self = target.equals(player.getUniqueId());
         if (!checkPermission(player, self ? "plots.home" : "plots.visit.other")) {
@@ -342,6 +348,16 @@ public final class PlotCommand implements TabExecutor {
         List<Plot> plots = manager().getOwnedBasePlots(target, null);
         if (plots.isEmpty()) {
             messages().send(player, "no-plots", "player", targetName);
+            return;
+        }
+        if (aliasArg != null) {
+            for (Plot plot : plots) {
+                if (plot.alias() != null && plot.alias().equalsIgnoreCase(aliasArg)) {
+                    teleport(player, plot);
+                    return;
+                }
+            }
+            messages().send(player, "alias-not-found", "player", targetName, "alias", aliasArg);
             return;
         }
         if (index < 1 || index > plots.size()) {

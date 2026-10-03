@@ -23,7 +23,7 @@ PlotSquared 的輕量版插件，直接讀寫 PlotSquared 原本的 `worlds.yml`
 3. bukkit.yml 或 Multiverse 中的地皮世界生成器，從 `PlotSquared` 改成 `PlotSquaredLite`
 4. 啟動伺服器，後台應出現「已載入 N 個地皮世界、M 塊地皮」
 
-權限節點與 PlotSquared 相同。完整說明見 [Lite/README.md](https://github.com/yoyolee-minecraft/PlotSquared-yeemo/blob/claude/youthful-dirac-76ga9i/Lite/README.md)。
+權限節點與 PlotSquared 相同。完整說明見 [Lite/README.md](https://github.com/yoyolee-minecraft/PlotSquared-yeemo/blob/main/Lite/README.md)。
 
 ## 不支援
 新的合併與拆分、flags（資料庫中的 flags 會原樣保留）、道路與地皮模板、部分地皮區域（generator.type 2）、叢集、評分、留言、經濟。

@@ -1,0 +1,151 @@
+# YeePlot 設定檔
+#
+# 這個插件直接讀寫 PlotSquared 的資料：
+#   <data-folder>/config/worlds.yml   地皮世界設定
+#   <data-folder>/config/storage.yml  資料庫設定（SQLite 或 MySQL）
+#   <data-folder>/storage.db          SQLite 資料庫（預設）
+# 因此可以直接取代 PlotSquared，也可以隨時換回去。
+
+# PlotSquared 的資料夾，相對於伺服器根目錄。
+# 若資料夾不存在會自動建立，並以 PlotSquared 的格式寫入新檔案。
+data-folder: plugins/PlotSquared
+
+limits:
+  # 地皮上限是否跨世界計算（對應 PlotSquared settings.yml 的 limit.global）
+  global: false
+  # 檢查 plots.plot.<數字> 權限的最大數字（對應 limit.max-plots）
+  max-plots: 127
+
+clear:
+  # 清除地皮時每 tick 最多改動的方塊數，數字越大清得越快但越吃效能
+  blocks-per-tick: 40000
+
+fix-roads:
+  # /plot fixroads 允許的最大半徑（方塊數）
+  max-radius: 128
+
+displays:
+  # 每塊地皮最多幾個展示實體（方塊、物品、文字展示），合併群組依塊數累加；0 代表不限制。
+  # 目前限制 Axiom 生成；WorldEdit 貼上時一律不貼展示實體。擁有 plots.admin.displaylimit 不受限制
+  per-plot: 100
+
+merge:
+  # 沒有 plots.merge.<數字> 權限時，合併群組最多幾塊地皮
+  default-max-plots: 4
+
+axiom:
+  # 檢查 Axiom 展示實體外觀範圍時，物品展示的外形大小（格）。
+  # 一般物品是 1；伺服器資源包有超大自訂模型的話可以調高（最大約 3）
+  item-display-size: 1.0
+
+# 認領後是否自動傳送到地皮
+teleport-on-claim: true
+
+# 是否在地皮世界禁止玩家互相攻擊（擁有 plots.admin.pvp 的玩家不受限制）
+disable-pvp: true
+
+messages:
+  prefix: "&8[&6Yeemo小幫手&8] &7"
+  no-permission: "&c你沒有權限：&f{permission}"
+  players-only: "&c只有玩家可以使用這個指令"
+  not-in-plot-world: "&c你不在地皮世界中"
+  not-in-plot: "&c你沒有站在地皮上"
+  plot-unowned: "&c這塊地皮還沒有人認領"
+  plot-claimed: "&c這塊地皮已經有人認領了"
+  not-owner: "&c你不是這塊地皮的擁有者"
+  limit-reached: "&c你已達到地皮數量上限（{amount}）"
+  claimed: "&a成功認領地皮 &f{id}"
+  no-free-plot: "&c找不到可用的空地"
+  player-not-found: "&c找不到玩家 &f{player}"
+  already-added: "&c{player} 已經在名單中"
+  not-added: "&c{player} 不在名單中"
+  cannot-add-owner: "&c不能把擁有者加入名單"
+  trusted: "&a已將 &f{player} &a設為信任者（隨時可建築）"
+  member-added: "&a已將 &f{player} &a設為成員（擁有者在線時可建築）"
+  denied: "&a已禁止 &f{player} &a進入這塊地皮"
+  removed: "&a已將 &f{player} &a從名單移除"
+  undenied: "&a已解除對 &f{player} &a的禁止"
+  you-were-denied: "&c你被禁止進入這塊地皮"
+  cannot-enter: "&c你被禁止進入這塊地皮"
+  clearing: "&7正在清除地皮，請稍候..."
+  cleared: "&a地皮已清除完成"
+  deleting: "&7正在刪除地皮，請稍候..."
+  deleted: "&a地皮已刪除"
+  confirm: "&e請在 20 秒內輸入 &f/{label} confirm &e確認此操作"
+  nothing-to-confirm: "&c沒有需要確認的操作"
+  teleporting: "&7傳送中..."
+  no-plots: "&c{player} 沒有任何地皮"
+  home-index-invalid: "&c地皮編號無效，可用範圍 1 ~ {max}"
+  home-set: "&a已設定地皮家園位置"
+  home-reset: "&a已重設地皮家園位置"
+  setowner: "&a已將地皮擁有者改為 &f{player}"
+  reloaded: "&a設定已重新載入"
+  fixroads-warning: "&e將重設你周圍 {radius} 格內所有道路與圍牆（地皮與合併道路不受影響），道路上的方塊、展示框、盔甲架會被清除"
+  fixroads-radius: "&c半徑必須是 1 ~ {max}"
+  fixroads-start: "&7正在修復道路，請稍候..."
+  fixroads-done: "&a道路修復完成"
+  invalid-id: "&c無效的地皮座標，格式為 x;z"
+  build-denied: "&c你不能在這裡建築"
+  build-height: "&c超出可建築的高度範圍"
+  worldedit-denied: "&c你只能在自己的地皮內使用 WorldEdit（站在地皮上再試一次）"
+  display-limit: "&c這塊地皮的展示實體已達上限（{limit} 個）"
+  time-usage: "&c用法：/plot time <0~24000|day|noon|night|midnight|reset>"
+  time-set: "&a地皮時間已設為 &f{time}"
+  time-reset: "&a已移除地皮時間設定"
+  weather-usage: "&c用法：/plot weather <clear|rain|reset>"
+  weather-set: "&a地皮天氣已設為 &f{weather}"
+  weather-reset: "&a已移除地皮天氣設定"
+  weather-clear: "晴天"
+  weather-rain: "雨天"
+  flag-usage: "&cYeePlot 只支援 time 與 weather：/plot flag set <time|weather> <值>、/plot flag remove <time|weather>"
+  merge-usage: "&c用法：/plot merge [north|east|south|west]，不填方向就使用你面向的方向"
+  merge-no-target: "&c{direction}邊沒有已認領的地皮可以合併"
+  merge-different-owner: "&c{direction}邊的地皮不是同一個擁有者，無法合併"
+  merge-not-rectangle: "&c合併後必須是完整的長方形"
+  merge-too-large: "&c合併後超過上限（最多 {max} 塊地皮）"
+  merge-warning: "&e將與{direction}邊的地皮 &f{target} &e合併，中間的道路會變成地皮。合併後無法拆分，只能整組刪除"
+  merge-changed: "&c地皮狀態已改變，請重新執行合併"
+  merging: "&7正在合併地皮，請稍候..."
+  merged: "&a地皮合併完成"
+  direction-north: "北"
+  direction-east: "東"
+  direction-south: "南"
+  direction-west: "西"
+  axiom-display-outside: "&c展示實體的外觀超出你可以建築的範圍，已取消這次變更"
+  axiom-denied: "&c這個版本的 AxiomPaper 不支援地皮權限，地皮世界中無法使用 Axiom 編輯"
+  list-header: "&6{player} 的地皮（{amount}）："
+  list-entry: "&7#{index} &b&n{world};{id}&r &f{alias}"
+  list-hover: "&e點擊傳送到 {world};{id}"
+  info: |-
+    &6地皮資訊 &f{world};{id}
+    &7別名：&f{alias}
+    &7擁有者：&f{owner}
+    &7信任者：&f{trusted}
+    &7成員：&f{members}
+    &7禁止：&f{denied}
+    &7合併：&f{merged}
+    &7時間：&f{time}  &7天氣：&f{weather}
+    &7展示實體：&f{displays}
+  help: |-
+    &6YeePlot 指令
+    &f/{label} claim &7認領腳下的地皮
+    &f/{label} auto &7自動認領一塊空地
+    &f/{label} home [編號|玩家] [編號] &7回到自己的地皮
+    &f/{label} visit <玩家> [編號] &7拜訪別人的地皮
+    &f/{label} tp <x;z> [世界] &7傳送到指定座標的地皮
+    &f/{label} info &7查看地皮資訊
+    &f/{label} list [玩家] &7列出地皮（點擊即可傳送，也可以用 /plotlist）
+    &f/{label} trust <玩家> &7加入信任者（隨時可建築）
+    &f/{label} add <玩家> &7加入成員（擁有者在線時可建築）
+    &f/{label} remove <玩家> &7從信任者／成員移除
+    &f/{label} deny <玩家> &7禁止進入
+    &f/{label} undeny <玩家> &7解除禁止
+    &f/{label} sethome [reset] &7設定家園位置
+    &f/{label} time <時間|reset> &7設定地皮時間
+    &f/{label} weather <clear|rain|reset> &7設定地皮天氣
+    &f/{label} merge [方向] &7與相鄰的自己的地皮合併
+    &f/{label} clear &7清除地皮（保留擁有權）
+    &f/{label} delete &7刪除地皮並清除
+    &f/{label} setowner <玩家> &7變更擁有者（管理員）
+    &f/{label} fixroads [半徑] &7修復周圍道路上的殘留方塊（管理員）
+    &f/{label} reload &7重新載入設定（管理員）

@@ -17,7 +17,7 @@ public final class ConfigUpdater {
      */
     private static final String[][] TEMPLATES = {
             {"messages.info", "{displays}"},
-            {"messages.help", "/{label} merge"}
+            {"messages.help", "/{label} alias"}
     };
 
     private ConfigUpdater() {

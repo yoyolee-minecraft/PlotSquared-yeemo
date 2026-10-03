@@ -340,6 +340,47 @@ public final class PlotService {
         }
     }
 
+    // ---------------------------------------------------------------- 別名
+
+    public enum AliasCheck {
+        OK, EMPTY, TOO_LONG, NUMBER, INVALID_CHARACTER, TAKEN
+    }
+
+    /**
+     * 檢查別名格式與是否重複，規則與 PlotSquared 相同：一個單字、少於 50 字、不能是純數字、
+     * 同一個世界內不能重複（不分大小寫）。另外禁止色碼字元，避免在訊息中產生格式。
+     * 是否與玩家名稱相同由呼叫端檢查。
+     */
+    public AliasCheck checkAlias(Plot plot, String alias) {
+        if (alias == null || alias.isBlank()) {
+            return AliasCheck.EMPTY;
+        }
+        if (alias.length() >= 50) {
+            return AliasCheck.TOO_LONG;
+        }
+        if (alias.matches("-?\\d+")) {
+            return AliasCheck.NUMBER;
+        }
+        if (alias.contains(" ") || alias.contains("&") || alias.contains("\u00a7")) {
+            return AliasCheck.INVALID_CHARACTER;
+        }
+        Plot existing = manager.findByAlias(alias, plot.area());
+        if (existing != null && !manager.getConnected(plot).contains(existing)) {
+            return AliasCheck.TAKEN;
+        }
+        return AliasCheck.OK;
+    }
+
+    /**
+     * 設定整個合併群組的別名（null 代表移除）。
+     */
+    public void setAlias(Plot plot, String alias) {
+        for (Plot member : manager.getConnected(plot)) {
+            member.alias(alias);
+            database.setAlias(member, alias);
+        }
+    }
+
     // ---------------------------------------------------------------- 合併
 
     public enum MergeCheck {
@@ -420,6 +461,8 @@ public final class PlotService {
         }
         Long time = plot.time();
         String weather = plot.weather();
+        // 別名沿用執行指令那一邊；那一邊沒有的話用另一邊的
+        String alias = plot.alias() != null ? plot.alias() : target.alias();
 
         // 合併前就屬於這些地皮的格子（地皮內部與已合併的道路），這些格子不會被重鋪
         int[] bounds = idBounds(plotWorld, ids);
@@ -454,6 +497,7 @@ public final class PlotService {
         }
         setTime(plot, time);
         setWeather(plot, weather);
+        setAlias(plot, alias);
 
         List<RegionRegenerator.Column> columns = mergeColumns(plotWorld, bounds, before);
         RegionRegenerator.run(plugin, world, plotWorld, columns, List.of(), entity -> false, blocksPerTick, whenDone);

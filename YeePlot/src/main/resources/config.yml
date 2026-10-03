@@ -89,6 +89,12 @@ messages:
   build-height: "&c超出可建築的高度範圍"
   worldedit-denied: "&c你只能在自己的地皮內使用 WorldEdit（站在地皮上再試一次）"
   display-limit: "&c這塊地皮的展示實體已達上限（{limit} 個）"
+  alias-usage: "&c用法：/plot alias set <名稱>、/plot alias remove"
+  alias-set: "&a地皮別名已設為 &f{alias}"
+  alias-removed: "&a已移除地皮別名"
+  alias-too-long: "&c別名太長（最多 49 個字）"
+  alias-invalid: "&c別名不能是純數字，也不能包含空白、& 或色碼"
+  alias-taken: "&c別名 &f{alias} &c已被其他地皮或玩家使用"
   time-usage: "&c用法：/plot time <0~24000|day|noon|night|midnight|reset>"
   time-set: "&a地皮時間已設為 &f{time}"
   time-reset: "&a已移除地皮時間設定"
@@ -131,7 +137,7 @@ messages:
     &f/{label} claim &7認領腳下的地皮
     &f/{label} auto &7自動認領一塊空地
     &f/{label} home [編號|玩家] [編號] &7回到自己的地皮
-    &f/{label} visit <玩家> [編號] &7拜訪別人的地皮
+    &f/{label} visit <玩家|別名> [編號] &7拜訪別人的地皮
     &f/{label} tp <x;z> [世界] &7傳送到指定座標的地皮
     &f/{label} info &7查看地皮資訊
     &f/{label} list [玩家] &7列出地皮（點擊即可傳送，也可以用 /plotlist）
@@ -141,6 +147,7 @@ messages:
     &f/{label} deny <玩家> &7禁止進入
     &f/{label} undeny <玩家> &7解除禁止
     &f/{label} sethome [reset] &7設定家園位置
+    &f/{label} alias set <名稱>／remove &7設定地皮別名
     &f/{label} time <時間|reset> &7設定地皮時間
     &f/{label} weather <clear|rain|reset> &7設定地皮天氣
     &f/{label} merge [方向] &7與相鄰的自己的地皮合併

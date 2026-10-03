@@ -65,6 +65,9 @@ permissions:
       plots.visit.shared: true
       plots.visit.other: true
       plots.set.home: true
+      plots.alias: true
+      plots.alias.set: true
+      plots.alias.remove: true
       plots.add: true
       plots.trust: true
       plots.deny: true
@@ -86,6 +89,8 @@ permissions:
       plots.admin.command.reload: true
       plots.admin.command.fixroads: true
       plots.admin.command.merge: true
+      plots.admin.alias.set: true
+      plots.admin.alias.remove: true
       plots.admin.displaylimit: true
       plots.set.flag.other: true
       plots.admin.entry.denied: true

@@ -76,15 +76,16 @@ Yeemo 伺服器的地皮插件。它是 PlotSquared 的輕量版，只保留地�
 | `/plot claim` | `plots.claim` | 認領腳下的地皮 |
 | `/plot auto` | `plots.auto` | 自動認領離中心最近的空地 |
 | `/plot home [編號\|玩家] [編號]` | `plots.home`；看別人的要 `plots.visit.other` | 傳送到地皮 |
-| `/plot visit <玩家> [編號]` | `plots.visit.other` | 拜訪別人的地皮 |
+| `/plot visit <玩家\|別名> [編號]` | `plots.visit.other` | 拜訪別人的地皮；找不到玩家時當成地皮別名 |
 | `/plot list [玩家]`、`/plotlist [玩家]` | `plots.list`；看別人的要 `plots.list.player` | 列出地皮，**點擊即可傳送** |
-| `/plot info` | `plots.info` | 擁有者、名單、合併方向、時間天氣、展示實體數量 |
+| `/plot info` | `plots.info` | 別名、擁有者、名單、合併方向、時間天氣、展示實體數量 |
 | `/plot trust <玩家>` | `plots.trust` | 加入信任者（隨時可以建築） |
 | `/plot add <玩家>` | `plots.add` | 加入成員（擁有者在線時才可以建築） |
 | `/plot remove <玩家>` | `plots.remove` | 從信任者、成員、禁止名單移除 |
 | `/plot deny <玩家>` | `plots.deny` | 禁止進入，人在裡面會被送回出生點 |
 | `/plot undeny <玩家>` | `plots.undeny` | 解除禁止 |
 | `/plot sethome [reset]` | `plots.set.home` | 設定或重設傳送位置 |
+| `/plot alias set <名稱>`、`/plot alias remove` | `plots.alias.set`、`plots.alias.remove` | 設定或移除地皮別名 |
 | `/plot time <時間\|reset>` | `plots.set.flag.time` | 設定地皮時間：0~24000，或 day、noon、night、midnight |
 | `/plot weather <clear\|rain\|reset>` | `plots.set.flag.weather` | 設定地皮天氣 |
 | `/plot flag set\|remove <time\|weather> [值]` | 同上 | 相容 PlotSquared 的寫法 |
@@ -103,7 +104,7 @@ Yeemo 伺服器的地皮插件。它是 PlotSquared 的輕量版，只保留地�
 | `/plot fixroads [半徑]` | `plots.admin.command.fixroads` | 把周圍不屬於任何地皮的道路與圍牆恢復原樣（需確認） |
 | `/plot reload` | `plots.admin.command.reload` | 重新載入 config.yml 與 worlds.yml |
 
-管理員也可以對別人的地皮執行 trust、deny、sethome、time、weather、merge、clear、delete，權限見下方。
+管理員也可以對別人的地皮執行 trust、deny、sethome、alias、time、weather、merge、clear、delete，權限見下方。
 
 ---
 
@@ -137,6 +138,7 @@ Yeemo 伺服器的地皮插件。它是 PlotSquared 的輕量版，只保留地�
 | `plots.admin.displaylimit` | 不受展示實體數量上限限制 |
 | `plots.admin.command.*` | 對別人的地皮執行指令（trust、deny、remove、undeny、sethome、merge、clear、delete、setowner、fixroads、reload） |
 | `plots.set.flag.other` | 設定別人地皮的時間與天氣 |
+| `plots.admin.alias.set`／`.remove` | 設定或移除別人地皮的別名 |
 
 ### WorldEdit 相關
 
@@ -201,6 +203,14 @@ Yeemo 伺服器的地皮插件。它是 PlotSquared 的輕量版，只保留地�
 `/plot list` 與 `/plotlist` 列出的每塊地皮都可以點擊，滑鼠移上去會顯示座標。點自己的地皮會執行 `/plot home 編號`，
 點別人的地皮會執行 `/plot visit 玩家 編號`，所以傳送權限與禁止進入照常檢查。
 
+### 地皮別名
+
+- `/plot alias set <名稱>` 為地皮取名，`/plot visit <名稱>` 就能直接傳送；別名會顯示在 `/plot info` 與 `/plot list`
+- 規則與 PlotSquared 相同：一個單字、最多 49 個字、不能是純數字、同一個世界內不能重複（不分大小寫）、不能跟玩家名稱相同
+- 另外禁止 `&` 與色碼字元，避免在訊息中產生格式
+- 別名套用到整個合併群組；合併時沿用執行指令那一邊的別名，那一邊沒有的話用另一邊的
+- 存在 PlotSquared 的 `plot_settings.alias` 欄位，原版設定過的別名直接沿用
+
 ### 時間與天氣
 
 - 只改變**站在地皮上的玩家**看到的時間與天氣，離開地皮就恢復世界原本的狀態，不影響其他玩家
@@ -213,7 +223,7 @@ PlotSquared 已經合併好的地皮會完整沿用。新的合併使用 `/plot 
 
 - 只能合併**同一個擁有者、相鄰**的地皮；管理員（`plots.admin.command.merge`）可以替別人合併，但兩邊仍須是同一個擁有者
 - 合併後必須是**完整的長方形**，不能做 L 形
-- 信任者、成員、禁止名單取聯集；時間與天氣沿用執行指令那一邊的設定
+- 信任者、成員、禁止名單取聯集；時間、天氣與別名沿用執行指令那一邊的設定
 - 只把這次新併入的道路鋪成地皮地板，外圍圍牆接起來；**已經合併過的道路上的建築不會被動到**
 - **不能拆分**，要拆就整組刪除
 
@@ -222,7 +232,7 @@ PlotSquared 已經合併好的地皮會完整沿用。新的合併使用 `/plot 
 | 操作 | 行為 |
 | --- | --- |
 | 保護 | 群組內被合併掉的道路與十字路口算地皮的一部分 |
-| 名單、setowner、時間天氣 | 套用到群組內每一塊 |
+| 名單、setowner、時間天氣、別名 | 套用到群組內每一塊 |
 | home、sethome | 以群組的基準地皮（z 最小，其次 x 最小）為準 |
 | clear | 整個群組一起清除，中間的道路鋪成地皮地板，保持合併 |
 | delete | 整個群組一起刪除；中間道路、外圍圍牆、合併缺口兩端全部還原，道路上的實體一併清除 |
@@ -294,7 +304,7 @@ FAWE 另外處理：
 | `plugins/PlotSquared/storage.db` | SQLite 資料庫 |
 
 - 使用的資料表與 PlotSquared 相同：`plot`、`plot_settings`、`plot_helpers`、`plot_trusted`、`plot_denied`、`plot_flags`
-- 合併狀態、家園位置、time 與 weather flag 使用原版的格式
+- 合併狀態、家園位置、別名、time 與 weather flag 使用原版的格式
 - 其他 flag（pvp、greeting 等）YeePlot 不使用，但會原樣保留在資料庫，換回 PlotSquared 時仍然有效
 - 刪除地皮時會一併刪除名單、設定、評分與 flag
 

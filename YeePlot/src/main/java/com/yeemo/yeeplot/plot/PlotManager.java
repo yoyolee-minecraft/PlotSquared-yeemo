@@ -158,6 +158,32 @@ public final class PlotManager {
     }
 
     /**
+     * 以別名尋找地皮（不分大小寫）。
+     *
+     * @param worldOrNull 只找這個世界；null 代表所有地皮世界（依世界名稱排序，回傳第一個）
+     * @return 找到的地皮所在群組的基準地皮，找不到回傳 null
+     */
+    public Plot findByAlias(String alias, String worldOrNull) {
+        List<String> names = new ArrayList<>(worlds.keySet());
+        Collections.sort(names);
+        for (String world : names) {
+            if (worldOrNull != null && !worldOrNull.equals(world)) {
+                continue;
+            }
+            Map<PlotId, Plot> map = plots.get(world);
+            if (map == null) {
+                continue;
+            }
+            for (Plot plot : map.values()) {
+                if (plot.alias() != null && plot.alias().equalsIgnoreCase(alias)) {
+                    return getBasePlot(plot);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * 合併群組實際佔用的平面範圍（包含被合併掉的道路），以多個長方形 {minX, minZ, maxX, maxZ} 表示。
      * 群組可能是 L 形，所以每塊地皮各自往東、往南延伸，十字路口只在四塊都合併時才加入。
      */

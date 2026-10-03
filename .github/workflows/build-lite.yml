@@ -4,8 +4,6 @@ on:
     paths:
       - "Lite/**"
       - ".github/workflows/build-lite.yml"
-    tags:
-      - "lite-v*"
   pull_request:
     paths:
       - "Lite/**"
@@ -31,14 +29,21 @@ jobs:
         with:
           name: PlotSquaredLite
           path: Lite/build/libs/*.jar
-      # 推送 lite-v* 標籤時，把 jar 發佈到 GitHub Releases
+      # 發佈 Release：版本號取自 Lite/build.gradle.kts，該版本還沒有 Release 時才建立（標籤在 GitHub 端建立）
       - name: Publish Release
-        if: startsWith(github.ref, 'refs/tags/lite-v')
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" Lite/build/libs/*.jar \
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Lite/build.gradle.kts)
+          TAG="lite-v$VERSION"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $TAG 已存在，略過"
+            exit 0
+          fi
+          gh release create "$TAG" Lite/build/libs/*.jar \
             --repo "$GITHUB_REPOSITORY" \
-            --title "PlotSquaredLite ${GITHUB_REF_NAME#lite-v}" \
+            --target "$GITHUB_SHA" \
+            --title "PlotSquaredLite $VERSION" \
             --notes-file Lite/RELEASE_NOTES.md \
             --prerelease

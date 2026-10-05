@@ -377,6 +377,10 @@ public final class YeePlot extends JavaPlugin {
         return getConfig().getInt("merge.default-max-plots", 4);
     }
 
+    public int listPageSize() {
+        return Math.max(1, getConfig().getInt("list.page-size", 10));
+    }
+
     public int fixRoadsMaxRadius() {
         return getConfig().getInt("fix-roads.max-radius", 128);
     }

@@ -2,6 +2,18 @@ Yeemo 伺服器的地皮插件（PlotSquared 的輕量版），直接讀寫 Plot
 
 > ⚠️ 這是預覽版本，尚未在正式伺服器上長時間運作。請先在測試服使用備份資料測試，再上線。
 
+## 1.5.1 更新內容
+- 多行訊息（`/plot list`、`/plot info`、`/plot help`、確認提示）只有第一行顯示 `[Yeemo小幫手]`，之後的行用空白對齊第一行的內容
+- 對齊寬度依原版字型自動計算；資源包改變字型而對不齊時，可以在 `messages.prefix-width` 填像素寬度
+
+## 1.5.0 更新內容
+- `/plot list` 分頁，每頁 10 塊（`list.page-size` 可以改），最下面有可以點擊的「上一頁」「下一頁」；也可以用 `/plot list [玩家] <頁數>`
+- 輸入玩家名稱的指令都能按 Tab 補齊，包含離線的地皮擁有者；`remove`、`undeny` 補上腳下地皮名單裡的玩家，`visit` 也會補上地皮別名
+- `/plot info` 的信任者、成員、禁止名單，擁有者會在名字後面看到 [X]，點擊即可移除
+- `/plot info` 最下面新增可以點擊的「其他領地」，列出這塊地皮擁有者的所有地皮
+- `/plot list <自己的名字>` 不再需要 `plots.list.player`
+- 舊版 `config.yml` 會自動補上新訊息與設定，`messages.help` 會更新成新版
+
 ## 1.4.0 更新內容
 - 支援 PlotSquared 的 AUGMENTED 地皮世界（在原版等原本地形上劃出地皮格線，worlds.yml 有 `generator.type: AUGMENTED`）。
   之前這種世界會被整個略過，地皮讀不到

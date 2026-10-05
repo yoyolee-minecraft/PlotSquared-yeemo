@@ -38,6 +38,10 @@ axiom:
   # 一般物品是 1；伺服器資源包有超大自訂模型的話可以調高（最大約 3）
   item-display-size: 1.0
 
+list:
+  # /plot list 每頁顯示幾塊地皮
+  page-size: 10
+
 # 認領後是否自動傳送到地皮
 teleport-on-claim: true
 
@@ -126,6 +130,13 @@ messages:
   # {name} 有別名時是別名，沒有時是座標；也可以用 {alias}、{world}、{id}
   list-entry: "&7#{index} &b&n{name}"
   list-hover: "&e點擊傳送到 {world};{id}"
+  # 超過一頁時，列表最下面的換頁列；{page} 目前頁數、{pages} 總頁數、{target} 點擊後的頁數
+  list-page: "&7第 {page}/{pages} 頁"
+  list-previous: "&b&n[上一頁]"
+  list-previous-hover: "&e點擊顯示第 {target} 頁"
+  list-next: "&b&n[下一頁]"
+  list-next-hover: "&e點擊顯示第 {target} 頁"
+  list-page-invalid: "&c頁數無效，可用範圍 1 ~ {max}"
   info: |-
     &6地皮資訊 &f{world};{id}
     &7別名：&f{alias}
@@ -136,6 +147,15 @@ messages:
     &7合併：&f{merged}
     &7時間：&f{time}  &7天氣：&f{weather}
     &7展示實體：&f{displays}
+  # info 的信任者、成員、禁止名單；擁有者會在名字後面看到 [X]，點擊即可移除
+  info-user: "&f{player}"
+  info-user-separator: "&7, "
+  info-remove: " &c[X]"
+  info-remove-hover: "&e點擊將 {player} 從名單移除"
+  info-undeny-hover: "&e點擊解除對 {player} 的禁止"
+  # info 最下面的「其他領地」，點擊等於 /plot list 擁有者
+  info-other-plots: "&b&n[其他領地]"
+  info-other-plots-hover: "&e點擊列出 {owner} 的所有地皮"
   help: |-
     &6YeePlot 指令
     &f/{label} claim &7認領腳下的地皮
@@ -144,10 +164,10 @@ messages:
     &f/{label} visit <玩家|別名> [編號|別名] &7拜訪別人的地皮
     &f/{label} tp <x;z> [世界] &7傳送到指定座標的地皮
     &f/{label} info &7查看地皮資訊
-    &f/{label} list [玩家] &7列出地皮（點擊即可傳送，也可以用 /plotlist）
+    &f/{label} list [玩家] [頁數] &7列出地皮（點擊即可傳送，也可以用 /plotlist）
     &f/{label} trust <玩家> &7加入信任者（隨時可建築）
     &f/{label} add <玩家> &7加入成員（擁有者在線時可建築）
-    &f/{label} remove <玩家> &7從信任者／成員移除
+    &f/{label} remove <玩家> &7從信任者／成員移除（也可以在 info 點 [X]）
     &f/{label} deny <玩家> &7禁止進入
     &f/{label} undeny <玩家> &7解除禁止
     &f/{label} sethome [reset] &7設定家園位置

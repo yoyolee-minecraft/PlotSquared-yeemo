@@ -59,6 +59,15 @@ public final class PlotManager {
         return map == null ? null : map.get(id);
     }
 
+    /**
+     * 所有已認領的地皮（Tab 補全用）。
+     */
+    public List<Plot> allPlots() {
+        List<Plot> all = new ArrayList<>();
+        plots.values().forEach(map -> all.addAll(map.values()));
+        return all;
+    }
+
     public void add(Plot plot) {
         plots.computeIfAbsent(plot.area(), k -> new ConcurrentHashMap<>()).put(plot.id(), plot);
     }

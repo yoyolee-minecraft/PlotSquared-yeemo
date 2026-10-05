@@ -80,8 +80,8 @@ Yeemo 伺服器的地皮插件。它是 PlotSquared 的輕量版，只保留地�
 | `/plot auto` | `plots.auto` | 自動認領離中心最近的空地 |
 | `/plot home [編號\|玩家] [編號\|別名]` | `plots.home`；看別人的要 `plots.visit.other` | 傳送到地皮 |
 | `/plot visit <玩家\|別名> [編號\|別名]` | `plots.visit.other` | 拜訪別人的地皮；例如 `/plot visit Steve 2`、`/plot visit Steve 城堡`、`/plot visit 城堡` |
-| `/plot list [玩家]`、`/plotlist [玩家]` | `plots.list`；看別人的要 `plots.list.player` | 列出地皮，**點擊即可傳送** |
-| `/plot info` | `plots.info` | 別名、擁有者、名單、合併方向、時間天氣、展示實體數量 |
+| `/plot list [玩家] [頁數]`、`/plotlist [玩家] [頁數]` | `plots.list`；看別人的要 `plots.list.player` | 列出地皮，**點擊即可傳送**，每頁 10 塊 |
+| `/plot info` | `plots.info` | 別名、擁有者、名單、合併方向、時間天氣、展示實體數量；擁有者可以點名單上的 [X] 移除玩家 |
 | `/plot trust <玩家>` | `plots.trust` | 加入信任者（隨時可以建築） |
 | `/plot add <玩家>` | `plots.add` | 加入成員（擁有者在線時才可以建築） |
 | `/plot remove <玩家>` | `plots.remove` | 從信任者、成員、禁止名單移除 |
@@ -97,6 +97,8 @@ Yeemo 伺服器的地皮插件。它是 PlotSquared 的輕量版，只保留地�
 | `/plot delete` | `plots.delete` | 刪除地皮並還原地形（需確認） |
 
 名單指令可以用 `*` 代表所有人，需要 `plots.trust.everyone`、`plots.add.everyone`、`plots.deny.everyone`。
+
+需要輸入玩家名稱的指令都可以按 Tab 補齊：在線玩家與所有地皮擁有者（包含離線的）；`remove`、`undeny` 補上腳下地皮名單裡的玩家；`visit`、`home` 另外補上地皮別名，第三個參數補上該玩家的地皮編號與別名。
 
 ### 管理員
 
@@ -183,7 +185,7 @@ Yeemo 伺服器的地皮插件。它是 PlotSquared 的輕量版，只保留地�
 從舊版升級時，YeePlot 會在啟動與 `/plot reload` 時：
 
 - 補上缺少的新設定（連同註解）
-- `messages.info`、`messages.help` 缺少新版欄位時換成新版樣板（**這兩項自訂過的內容會被覆蓋**）
+- `messages.info`、`messages.help`、`messages.list-entry` 缺少新版欄位時換成新版樣板（**這幾項自訂過的內容會被覆蓋**）
 - 其他已經存在的設定一律保留
 
 後台會列出更新了哪些項目。
@@ -219,6 +221,18 @@ PlotSquared 的 AUGMENTED 地皮區域（worlds.yml 裡 `generator.type: AUGMENT
 
 `/plot list` 與 `/plotlist` 列出的每塊地皮都可以點擊，滑鼠移上去會顯示座標。點自己的地皮會執行 `/plot home 編號`，
 點別人的地皮會執行 `/plot visit 玩家 編號`，所以傳送權限與禁止進入照常檢查。
+
+- 每頁顯示 10 塊（`config.yml` 的 `list.page-size`），超過一頁時最下面有可以點擊的「上一頁」「下一頁」
+- 也可以直接輸入頁數：`/plot list 2` 是自己的第 2 頁，`/plot list Steve 2` 是 Steve 的第 2 頁
+- 編號跨頁連續（第 2 頁從 #11 開始），與 `/plot home 編號` 對應
+- 只有一個純數字的參數會被當成頁數；玩家名稱剛好是純數字時，請用 `/plot list 123 1`
+
+### /plot info 的快捷按鈕
+
+- 擁有者（或有 `plots.admin.command.remove`、`plots.admin.command.undeny` 的管理員）會在信任者、成員、禁止名單的每個名字後面看到 **[X]**
+- 點擊信任者、成員的 [X] 等於 `/plot remove`，點擊禁止名單的 [X] 等於 `/plot undeny`，一樣需要 `plots.remove`、`plots.undeny`
+- 按鈕會指定是哪一塊地皮，就算點擊前已經走到別塊地皮，也只會改到查看的那一塊
+- 最下面的 **[其他領地]** 等於 `/plot list 擁有者`，列出這塊地皮擁有者的所有地皮
 
 ### 地皮別名
 

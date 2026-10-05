@@ -267,8 +267,15 @@ public final class PlotCommand implements TabExecutor {
     }
 
     private void requireConfirm(Player player, String label, Runnable action) {
+        requireConfirm(messages().block(player), player, label, action);
+    }
+
+    /**
+     * 確認提示接在前面的警告後面，只顯示一次 prefix。
+     */
+    private void requireConfirm(Messages.Block block, Player player, String label, Runnable action) {
         pending.put(player.getUniqueId(), new PendingConfirm(action, System.currentTimeMillis() + CONFIRM_TIMEOUT));
-        messages().send(player, "confirm", "label", label);
+        block.send("confirm", "label", label);
     }
 
     // ---------------------------------------------------------------- 子指令
@@ -464,7 +471,8 @@ public final class PlotCommand implements TabExecutor {
         lists.put("members", userList(plot.members(), canRemove ? "remove" : null, reference, "info-remove-hover"));
         lists.put("denied", userList(plot.denied(), canUndeny ? "undeny" : null, reference, "info-undeny-hover"));
         String ownerName = name(plot.owner());
-        messages().sendRich(player, "info", lists,
+        Messages.Block block = messages().block(player);
+        block.sendRich("info", lists,
                 "world", plot.area(),
                 "id", plot.id().toString(),
                 "alias", plot.alias() == null || plot.alias().isEmpty() ? "-" : plot.alias(),
@@ -478,7 +486,7 @@ public final class PlotCommand implements TabExecutor {
         );
         if (player.hasPermission(owner ? "plots.list" : "plots.list.player")) {
             // 指定第 1 頁，避免純數字的玩家名稱被當成頁數
-            messages().sendClickable(player, "info-other-plots", "info-other-plots-hover",
+            block.sendClickable("info-other-plots", "info-other-plots-hover",
                     "/plot list " + ownerName + " 1", "owner", ownerName);
         }
     }
@@ -545,7 +553,8 @@ public final class PlotCommand implements TabExecutor {
             messages().send(player, "list-page-invalid", "max", String.valueOf(pages));
             return;
         }
-        messages().send(player, "list-header", "player", targetName, "amount", String.valueOf(plots.size()),
+        Messages.Block block = messages().block(player);
+        block.send("list-header", "player", targetName, "amount", String.valueOf(plots.size()),
                 "page", String.valueOf(page), "pages", String.valueOf(pages));
         int from = (page - 1) * pageSize;
         for (int i = from; i < Math.min(from + pageSize, plots.size()); i++) {
@@ -555,7 +564,7 @@ public final class PlotCommand implements TabExecutor {
             String click = self ? "/plot home " + index : "/plot visit " + targetName + " " + index;
             // 有別名就優先顯示別名，沒有的話顯示座標；滑鼠移上去仍會顯示座標
             String coordinates = plot.area() + ";" + plot.id();
-            messages().sendClickable(player, "list-entry", "list-hover", click,
+            block.sendClickable("list-entry", "list-hover", click,
                     "index", String.valueOf(index),
                     "name", plot.alias() != null ? plot.alias() : coordinates,
                     "world", plot.area(),
@@ -579,7 +588,7 @@ public final class PlotCommand implements TabExecutor {
                         "/plot list " + targetName + " " + (page + 1),
                         "page", current, "pages", total, "target", String.valueOf(page + 1)));
             }
-            messages().sendLine(player, footer.toArray(new Component[0]));
+            block.sendLine(footer.toArray(new Component[0]));
         }
     }
 
@@ -729,10 +738,11 @@ public final class PlotCommand implements TabExecutor {
         if (plot == null) {
             return;
         }
+        Messages.Block block = messages().block(player);
         if (!service().managesTerrain(plot.area())) {
-            messages().send(player, "delete-keeps-terrain");
+            block.send("delete-keeps-terrain");
         }
-        requireConfirm(player, label, () -> {
+        requireConfirm(block, player, label, () -> {
             if (manager().getPlotAbs(plot.area(), plot.id()) != plot) {
                 messages().send(player, "plot-unowned");
                 return;
@@ -1002,8 +1012,9 @@ public final class PlotCommand implements TabExecutor {
             default -> {
             }
         }
-        messages().send(player, "merge-warning", "direction", directionName, "target", target.id().toString());
-        requireConfirm(player, label, () -> {
+        Messages.Block block = messages().block(player);
+        block.send("merge-warning", "direction", directionName, "target", target.id().toString());
+        requireConfirm(block, player, label, () -> {
             // 確認期間地皮可能已被刪除或改變，重新檢查一次
             if (manager().getPlotAbs(plot.area(), plot.id()) != plot
                     || manager().getPlotAbs(target.area(), target.id()) != target
@@ -1044,8 +1055,9 @@ public final class PlotCommand implements TabExecutor {
         int x = player.getLocation().getBlockX();
         int z = player.getLocation().getBlockZ();
         int finalRadius = radius;
-        messages().send(player, "fixroads-warning", "radius", String.valueOf(radius));
-        requireConfirm(player, label, () -> {
+        Messages.Block block = messages().block(player);
+        block.send("fixroads-warning", "radius", String.valueOf(radius));
+        requireConfirm(block, player, label, () -> {
             messages().send(player, "fixroads-start");
             service().fixRoads(world, x - finalRadius, z - finalRadius, x + finalRadius, z + finalRadius,
                     () -> messages().send(player, "fixroads-done"));

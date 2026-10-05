@@ -50,6 +50,9 @@ disable-pvp: true
 
 messages:
   prefix: "&8[&6Yeemo小幫手&8] &7"
+  # 多行訊息只有第一行顯示 prefix，之後的行用空白補到與第一行對齊。
+  # 寬度依原版字型自動計算；用了改變字型寬度的資源包、對不齊時，可以填像素寬度（0 為自動）
+  prefix-width: 0
   no-permission: "&c你沒有權限：&f{permission}"
   players-only: "&c只有玩家可以使用這個指令"
   not-in-plot-world: "&c你不在地皮世界中"

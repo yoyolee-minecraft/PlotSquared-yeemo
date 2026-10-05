@@ -227,6 +227,12 @@ PlotSquared 的 AUGMENTED 地皮區域（worlds.yml 裡 `generator.type: AUGMENT
 - 編號跨頁連續（第 2 頁從 #11 開始），與 `/plot home 編號` 對應
 - 只有一個純數字的參數會被當成頁數；玩家名稱剛好是純數字時，請用 `/plot list 123 1`
 
+### 訊息排版
+
+一個指令輸出多行訊息時（例如 `/plot list`、`/plot info`、`/plot help`），只有第一行顯示 `[Yeemo小幫手]`，
+之後的行用空白補到與第一行的內容對齊。寬度依原版字型自動計算（一般空白 4 像素、粗體空白 5 像素搭配），
+使用改變字型寬度的資源包而對不齊時，可以在 `messages.prefix-width` 填入像素寬度。
+
 ### /plot info 的快捷按鈕
 
 - 擁有者（或有 `plots.admin.command.remove`、`plots.admin.command.undeny` 的管理員）會在信任者、成員、禁止名單的每個名字後面看到 **[X]**

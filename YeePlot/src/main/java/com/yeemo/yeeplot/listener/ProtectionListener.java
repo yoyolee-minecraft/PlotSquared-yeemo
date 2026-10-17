@@ -14,6 +14,7 @@ import org.bukkit.DyeColor;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Cushion;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntitySnapshot;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -234,20 +235,27 @@ public final class ProtectionListener implements Listener {
     }
 
     /**
-     * 坐墊剛掉落的物品，等同一個 tick 內的 PrePlayerAttackEntityEvent 決定要不要收回。
+     * 坐墊被打破時掉落的物品與當下的完整資料，等同一個 tick 內的 PrePlayerAttackEntityEvent 決定要不要還原。
+     */
+    private record CushionDrop(Item item, EntitySnapshot snapshot) {
+    }
+
+    /**
      * 自然掉落（下面的方塊被拿走）不會有攻擊事件，留著的紀錄超過上限就丟掉最舊的。
      */
-    private final Map<UUID, Item> cushionDrops = new LinkedHashMap<>() {
+    private final Map<UUID, CushionDrop> cushionDrops = new LinkedHashMap<>() {
         @Override
-        protected boolean removeEldestEntry(Map.Entry<UUID, Item> eldest) {
+        protected boolean removeEldestEntry(Map.Entry<UUID, CushionDrop> eldest) {
             return size() > 32;
         }
     };
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityDrop(EntityDropItemEvent event) {
-        if (event.getEntity() instanceof Cushion && inPlotWorld(event.getEntity().getLocation())) {
-            cushionDrops.put(event.getEntity().getUniqueId(), event.getItemDrop());
+        Entity entity = event.getEntity();
+        if (entity instanceof Cushion && inPlotWorld(entity.getLocation())) {
+            // 掉落時坐墊還沒被移除，這時候的快照包含方向等所有資料
+            cushionDrops.put(entity.getUniqueId(), new CushionDrop(event.getItemDrop(), entity.createSnapshot()));
         }
     }
 
@@ -260,7 +268,7 @@ public final class ProtectionListener implements Listener {
     @EventHandler(priority = EventPriority.LOW)
     public void onPreAttack(PrePlayerAttackEntityEvent event) {
         Entity victim = event.getAttacked();
-        Item drop = cushionDrops.remove(victim.getUniqueId());
+        CushionDrop drop = cushionDrops.remove(victim.getUniqueId());
         if (victim instanceof Player || !inPlotWorld(victim.getLocation())) {
             return;
         }
@@ -280,12 +288,13 @@ public final class ProtectionListener implements Listener {
 
     /**
      * 只有確定收回了掉落物（或本來就不會掉落）才放回坐墊，避免變成複製坐墊的方法。
+     * 有掉落時的快照就照快照複製一個（方向、顏色等全部相同），沒有的話自己設定位置、方向與顏色。
      */
-    private static void restoreCushion(Cushion cushion, Item drop, boolean noDrop) {
+    private static void restoreCushion(Cushion cushion, CushionDrop drop, boolean noDrop) {
         Location location = cushion.getLocation();
         boolean reclaimed = noDrop;
-        if (drop != null && drop.isValid()) {
-            drop.remove();
+        if (drop != null && drop.item() != null && drop.item().isValid()) {
+            drop.item().remove();
             reclaimed = true;
         } else if (!noDrop) {
             // 沒收到掉落事件時，找同一個 tick 生成在旁邊的坐墊物品
@@ -301,8 +310,15 @@ public final class ProtectionListener implements Listener {
         if (!reclaimed) {
             return;
         }
+        if (drop != null && drop.snapshot() != null) {
+            drop.snapshot().createEntity(location);
+            return;
+        }
         DyeColor color = cushion.getColor();
+        float yaw = location.getYaw();
+        float pitch = location.getPitch();
         location.getWorld().spawn(location, Cushion.class, restored -> {
+            restored.setRotation(yaw, pitch);
             if (color != null) {
                 restored.setColor(color);
             }

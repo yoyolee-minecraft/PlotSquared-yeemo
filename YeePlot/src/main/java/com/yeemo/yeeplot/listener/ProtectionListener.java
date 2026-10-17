@@ -10,7 +10,11 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.entity.Enderman;
+import org.bukkit.DyeColor;
+import org.bukkit.GameMode;
+import org.bukkit.entity.Cushion;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -32,6 +36,7 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.BlockSpreadEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDropItemEvent;
 import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
@@ -49,7 +54,10 @@ import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.event.world.StructureGrowEvent;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * 地皮保護：建築、破壞、互動、液體與活塞跨界、爆炸、禁止進入。
@@ -226,18 +234,79 @@ public final class ProtectionListener implements Listener {
     }
 
     /**
-     * 玩家左鍵攻擊任何實體之前觸發。26.3 的坐墊被打破時不會觸發 EntityDamageByEntityEvent，
-     * 所以在這裡先擋；其他實體被擋下後也不會再進到傷害事件。
+     * 坐墊剛掉落的物品，等同一個 tick 內的 PrePlayerAttackEntityEvent 決定要不要收回。
+     * 自然掉落（下面的方塊被拿走）不會有攻擊事件，留著的紀錄超過上限就丟掉最舊的。
      */
-    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    private final Map<UUID, Item> cushionDrops = new LinkedHashMap<>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<UUID, Item> eldest) {
+            return size() > 32;
+        }
+    };
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityDrop(EntityDropItemEvent event) {
+        if (event.getEntity() instanceof Cushion && inPlotWorld(event.getEntity().getLocation())) {
+            cushionDrops.put(event.getEntity().getUniqueId(), event.getItemDrop());
+        }
+    }
+
+    /**
+     * 玩家左鍵攻擊任何實體時觸發。
+     * 26.3 的坐墊在 Paper 算出這次攻擊之前（skipAttackInteraction）就已經被打破、掉出物品，
+     * 事件也會以「已取消」的狀態送來，取消它擋不住；所以沒有權限時把剛掉落的物品收回、
+     * 在原位放回一個同顏色同方向的坐墊。其他實體照常取消攻擊。
+     */
+    @EventHandler(priority = EventPriority.LOW)
     public void onPreAttack(PrePlayerAttackEntityEvent event) {
         Entity victim = event.getAttacked();
+        Item drop = cushionDrops.remove(victim.getUniqueId());
         if (victim instanceof Player || !inPlotWorld(victim.getLocation())) {
             return;
         }
-        if (deny(event.getPlayer(), victim.getLocation(), PlotPermissions.Action.DESTROY)) {
-            event.setCancelled(true);
+        boolean broken = victim instanceof Cushion && !victim.isValid();
+        if (event.isCancelled() && !broken) {
+            return;
         }
+        if (!deny(event.getPlayer(), victim.getLocation(), PlotPermissions.Action.DESTROY)) {
+            return;
+        }
+        event.setCancelled(true);
+        if (broken) {
+            // 創造模式打破不會掉落物品，不用收回
+            restoreCushion((Cushion) victim, drop, event.getPlayer().getGameMode() == GameMode.CREATIVE);
+        }
+    }
+
+    /**
+     * 只有確定收回了掉落物（或本來就不會掉落）才放回坐墊，避免變成複製坐墊的方法。
+     */
+    private static void restoreCushion(Cushion cushion, Item drop, boolean noDrop) {
+        Location location = cushion.getLocation();
+        boolean reclaimed = noDrop;
+        if (drop != null && drop.isValid()) {
+            drop.remove();
+            reclaimed = true;
+        } else if (!noDrop) {
+            // 沒收到掉落事件時，找同一個 tick 生成在旁邊的坐墊物品
+            for (Entity nearby : location.getWorld().getNearbyEntities(location, 1.5, 1.5, 1.5)) {
+                if (nearby instanceof Item item && item.getTicksLived() <= 1
+                        && item.getItemStack().getType().name().endsWith("_CUSHION")) {
+                    item.remove();
+                    reclaimed = true;
+                    break;
+                }
+            }
+        }
+        if (!reclaimed) {
+            return;
+        }
+        DyeColor color = cushion.getColor();
+        location.getWorld().spawn(location, Cushion.class, restored -> {
+            if (color != null) {
+                restored.setColor(color);
+            }
+        });
     }
 
     /**

@@ -1,7 +1,7 @@
 name: YeePlot
 main: com.yeemo.yeeplot.YeePlot
 version: "${version}"
-api-version: "1.21"
+api-version: "26.3"
 load: STARTUP
 description: "Yeemo 的地皮插件：地皮生成、認領與權限控制，直接沿用 PlotSquared 的資料"
 softdepend: [ WorldEdit, FastAsyncWorldEdit, AxiomPaper ]

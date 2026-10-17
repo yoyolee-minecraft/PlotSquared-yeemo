@@ -9,6 +9,7 @@ import com.yeemo.yeeplot.plot.PlotManager;
 import com.yeemo.yeeplot.plot.PlotService;
 import com.yeemo.yeeplot.storage.Database;
 import com.yeemo.yeeplot.world.PlotWorld;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
@@ -22,11 +23,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -50,6 +55,10 @@ public final class PlotCommand implements TabExecutor {
 
     private final YeePlot plugin;
     private final Map<UUID, PendingConfirm> pending = new HashMap<>();
+    /**
+     * 地皮擁有者的名稱，給 Tab 補全用。名稱很少改變，查過一次就留著，避免每次按 Tab 都去讀玩家資料。
+     */
+    private final Map<UUID, String> ownerNames = new ConcurrentHashMap<>();
 
     private record PendingConfirm(Runnable action, long expires) {
     }
@@ -166,6 +175,33 @@ public final class PlotCommand implements TabExecutor {
         return plot;
     }
 
+    /**
+     * 與 ownedPlotHere 相同，但有指定「世界;x;z」時改用那塊地皮（/plot info 的 [X] 按鈕會帶上，
+     * 避免玩家走到別塊地皮後才點擊，結果改到別塊地皮）。
+     */
+    private Plot ownedPlot(Player player, String adminPermission, String reference) {
+        if (reference == null) {
+            return ownedPlotHere(player, adminPermission);
+        }
+        int last = reference.lastIndexOf(';');
+        int middle = last > 0 ? reference.lastIndexOf(';', last - 1) : -1;
+        PlotId id = middle > 0 ? PlotId.parse(reference.substring(middle + 1)) : null;
+        if (id == null) {
+            messages().send(player, "invalid-id");
+            return null;
+        }
+        Plot plot = manager().getPlotAbs(reference.substring(0, middle), id);
+        if (plot == null) {
+            messages().send(player, "plot-unowned");
+            return null;
+        }
+        if (!plot.isOwner(player.getUniqueId()) && !player.hasPermission(adminPermission)) {
+            messages().send(player, "not-owner");
+            return null;
+        }
+        return plot;
+    }
+
     private int allowedPlots(Player player) {
         if (player.hasPermission("plots.admin") || player.hasPermission("plots.*") || player.hasPermission("plots.plot.*")) {
             return Integer.MAX_VALUE;
@@ -221,13 +257,6 @@ public final class PlotCommand implements TabExecutor {
         return name != null ? name : uuid.toString();
     }
 
-    private static String names(Collection<UUID> uuids) {
-        if (uuids.isEmpty()) {
-            return "-";
-        }
-        return uuids.stream().map(PlotCommand::name).collect(Collectors.joining(", "));
-    }
-
     private void teleport(Player player, Plot plot) {
         boolean member = plot.isAdded(player.getUniqueId(), manager().isOwnerOnline(plot));
         Location home = service().getHome(plot, member);
@@ -238,8 +267,15 @@ public final class PlotCommand implements TabExecutor {
     }
 
     private void requireConfirm(Player player, String label, Runnable action) {
+        requireConfirm(messages().block(player), player, label, action);
+    }
+
+    /**
+     * 確認提示接在前面的警告後面，只顯示一次 prefix。
+     */
+    private void requireConfirm(Messages.Block block, Player player, String label, Runnable action) {
         pending.put(player.getUniqueId(), new PendingConfirm(action, System.currentTimeMillis() + CONFIRM_TIMEOUT));
-        messages().send(player, "confirm", "label", label);
+        block.send("confirm", "label", label);
     }
 
     // ---------------------------------------------------------------- 子指令
@@ -423,14 +459,24 @@ public final class PlotCommand implements TabExecutor {
                 merged.add(direction.name().toLowerCase(Locale.ROOT));
             }
         }
-        messages().send(player, "info",
+        boolean owner = plot.isOwner(player.getUniqueId());
+        // 擁有者（或有管理權限）才會在名字後面看到 [X]，點擊後執行 remove／undeny
+        boolean canRemove = player.hasPermission("plots.remove")
+                && (owner || player.hasPermission("plots.admin.command.remove"));
+        boolean canUndeny = player.hasPermission("plots.undeny")
+                && (owner || player.hasPermission("plots.admin.command.undeny"));
+        String reference = plot.area() + ";" + plot.id();
+        Map<String, Component> lists = new LinkedHashMap<>();
+        lists.put("trusted", userList(plot.trusted(), canRemove ? "remove" : null, reference, "info-remove-hover"));
+        lists.put("members", userList(plot.members(), canRemove ? "remove" : null, reference, "info-remove-hover"));
+        lists.put("denied", userList(plot.denied(), canUndeny ? "undeny" : null, reference, "info-undeny-hover"));
+        String ownerName = name(plot.owner());
+        Messages.Block block = messages().block(player);
+        block.sendRich("info", lists,
                 "world", plot.area(),
                 "id", plot.id().toString(),
                 "alias", plot.alias() == null || plot.alias().isEmpty() ? "-" : plot.alias(),
-                "owner", name(plot.owner()),
-                "trusted", names(plot.trusted()),
-                "members", names(plot.members()),
-                "denied", names(plot.denied()),
+                "owner", ownerName,
                 "merged", merged.isEmpty() ? "-" : String.join(", ", merged),
                 "time", plot.time() == null ? "-" : String.valueOf(plot.time()),
                 "weather", plot.weather() == null ? "-" : messages().format("weather-" + plot.weather()),
@@ -438,22 +484,62 @@ public final class PlotCommand implements TabExecutor {
                         ? plugin.displayLimit().count(plot) + "/" + plugin.displayLimit().limit(plot)
                         : String.valueOf(plugin.displayLimit().count(plot))
         );
+        if (player.hasPermission(owner ? "plots.list" : "plots.list.player")) {
+            // 指定第 1 頁，避免純數字的玩家名稱被當成頁數
+            block.sendClickable("info-other-plots", "info-other-plots-hover",
+                    "/plot list " + ownerName + " 1", "owner", ownerName);
+        }
     }
 
+    /**
+     * /plot info 的名單：每個名字後面可以加上 [X]，點擊執行「/plot command 名字 世界;x;z」。
+     */
+    private Component userList(Collection<UUID> uuids, String command, String reference, String hoverKey) {
+        if (uuids.isEmpty()) {
+            return messages().component("info-user", "player", "-");
+        }
+        List<Component> parts = new ArrayList<>();
+        for (UUID uuid : uuids) {
+            if (!parts.isEmpty()) {
+                parts.add(messages().component("info-user-separator"));
+            }
+            String name = name(uuid);
+            parts.add(messages().component("info-user", "player", name));
+            if (command != null) {
+                parts.add(messages().clickable("info-remove", hoverKey,
+                        "/plot " + command + " " + name + " " + reference, "player", name));
+            }
+        }
+        return Component.text().append(parts).build();
+    }
+
+    /**
+     * /plot list [玩家] [頁數]，或 /plot list [頁數]。只有一個純數字參數時當成自己的頁數。
+     */
     private void list(Player player, String[] args) {
         UUID target = player.getUniqueId();
         String targetName = player.getName();
-        if (args.length > 0) {
-            if (!checkPermission(player, "plots.list.player")) {
-                return;
-            }
+        int page = 1;
+        if (args.length == 1 && isInteger(args[0])) {
+            page = Integer.parseInt(args[0]);
+        } else if (args.length > 0) {
             target = resolve(args[0]);
             targetName = args[0];
             if (target == null) {
-                messages().send(player, "player-not-found", "player", targetName);
+                if (checkPermission(player, "plots.list.player")) {
+                    messages().send(player, "player-not-found", "player", targetName);
+                }
                 return;
             }
-        } else if (!checkPermission(player, "plots.list")) {
+            if (args.length > 1) {
+                page = isInteger(args[1]) ? Integer.parseInt(args[1]) : 0;
+            }
+        }
+        boolean self = target.equals(player.getUniqueId());
+        if (self) {
+            targetName = player.getName();
+        }
+        if (!checkPermission(player, self ? "plots.list" : "plots.list.player")) {
             return;
         }
         List<Plot> plots = manager().getOwnedBasePlots(target, null);
@@ -461,21 +547,48 @@ public final class PlotCommand implements TabExecutor {
             messages().send(player, "no-plots", "player", targetName);
             return;
         }
-        messages().send(player, "list-header", "player", targetName, "amount", String.valueOf(plots.size()));
-        boolean self = target.equals(player.getUniqueId());
-        for (int i = 0; i < plots.size(); i++) {
+        int pageSize = plugin.listPageSize();
+        int pages = (plots.size() + pageSize - 1) / pageSize;
+        if (page < 1 || page > pages) {
+            messages().send(player, "list-page-invalid", "max", String.valueOf(pages));
+            return;
+        }
+        Messages.Block block = messages().block(player);
+        block.send("list-header", "player", targetName, "amount", String.valueOf(plots.size()),
+                "page", String.valueOf(page), "pages", String.valueOf(pages));
+        int from = (page - 1) * pageSize;
+        for (int i = from; i < Math.min(from + pageSize, plots.size()); i++) {
             Plot plot = plots.get(i);
             int index = i + 1;
             // 點擊後執行 home／visit，所以照樣會檢查傳送權限與禁止進入
             String click = self ? "/plot home " + index : "/plot visit " + targetName + " " + index;
             // 有別名就優先顯示別名，沒有的話顯示座標；滑鼠移上去仍會顯示座標
             String coordinates = plot.area() + ";" + plot.id();
-            messages().sendClickable(player, "list-entry", "list-hover", click,
+            block.sendClickable("list-entry", "list-hover", click,
                     "index", String.valueOf(index),
                     "name", plot.alias() != null ? plot.alias() : coordinates,
                     "world", plot.area(),
                     "id", plot.id().toString(),
                     "alias", plot.alias() == null ? "" : plot.alias());
+        }
+        if (pages > 1) {
+            String current = String.valueOf(page);
+            String total = String.valueOf(pages);
+            List<Component> footer = new ArrayList<>();
+            if (page > 1) {
+                footer.add(messages().clickable("list-previous", "list-previous-hover",
+                        "/plot list " + targetName + " " + (page - 1),
+                        "page", current, "pages", total, "target", String.valueOf(page - 1)));
+                footer.add(Component.text(" "));
+            }
+            footer.add(messages().component("list-page", "page", current, "pages", total));
+            if (page < pages) {
+                footer.add(Component.text(" "));
+                footer.add(messages().clickable("list-next", "list-next-hover",
+                        "/plot list " + targetName + " " + (page + 1),
+                        "page", current, "pages", total, "target", String.valueOf(page + 1)));
+            }
+            block.sendLine(footer.toArray(new Component[0]));
         }
     }
 
@@ -541,7 +654,7 @@ public final class PlotCommand implements TabExecutor {
             messages().send(player, "player-not-found", "player", "?");
             return;
         }
-        Plot plot = ownedPlotHere(player, "plots.admin.command.remove");
+        Plot plot = ownedPlot(player, "plots.admin.command.remove", args.length > 1 ? args[1] : null);
         if (plot == null) {
             return;
         }
@@ -565,7 +678,7 @@ public final class PlotCommand implements TabExecutor {
             messages().send(player, "player-not-found", "player", "?");
             return;
         }
-        Plot plot = ownedPlotHere(player, "plots.admin.command.undeny");
+        Plot plot = ownedPlot(player, "plots.admin.command.undeny", args.length > 1 ? args[1] : null);
         if (plot == null) {
             return;
         }
@@ -625,10 +738,11 @@ public final class PlotCommand implements TabExecutor {
         if (plot == null) {
             return;
         }
+        Messages.Block block = messages().block(player);
         if (!service().managesTerrain(plot.area())) {
-            messages().send(player, "delete-keeps-terrain");
+            block.send("delete-keeps-terrain");
         }
-        requireConfirm(player, label, () -> {
+        requireConfirm(block, player, label, () -> {
             if (manager().getPlotAbs(plot.area(), plot.id()) != plot) {
                 messages().send(player, "plot-unowned");
                 return;
@@ -898,8 +1012,9 @@ public final class PlotCommand implements TabExecutor {
             default -> {
             }
         }
-        messages().send(player, "merge-warning", "direction", directionName, "target", target.id().toString());
-        requireConfirm(player, label, () -> {
+        Messages.Block block = messages().block(player);
+        block.send("merge-warning", "direction", directionName, "target", target.id().toString());
+        requireConfirm(block, player, label, () -> {
             // 確認期間地皮可能已被刪除或改變，重新檢查一次
             if (manager().getPlotAbs(plot.area(), plot.id()) != plot
                     || manager().getPlotAbs(target.area(), target.id()) != target
@@ -940,8 +1055,9 @@ public final class PlotCommand implements TabExecutor {
         int x = player.getLocation().getBlockX();
         int z = player.getLocation().getBlockZ();
         int finalRadius = radius;
-        messages().send(player, "fixroads-warning", "radius", String.valueOf(radius));
-        requireConfirm(player, label, () -> {
+        Messages.Block block = messages().block(player);
+        block.send("fixroads-warning", "radius", String.valueOf(radius));
+        requireConfirm(block, player, label, () -> {
             messages().send(player, "fixroads-start");
             service().fixRoads(world, x - finalRadius, z - finalRadius, x + finalRadius, z + finalRadius,
                     () -> messages().send(player, "fixroads-done"));
@@ -975,23 +1091,32 @@ public final class PlotCommand implements TabExecutor {
             withSub[0] = "list";
             System.arraycopy(args, 0, withSub, 1, args.length);
             args = withSub;
-            if (args.length == 1) {
-                return List.of();
-            }
         }
         if (args.length == 1) {
             String prefix = args[0].toLowerCase(Locale.ROOT);
             return SUBCOMMANDS.stream().filter(s -> s.startsWith(prefix)).collect(Collectors.toList());
         }
+        String sub = ALIASES.getOrDefault(args[0].toLowerCase(Locale.ROOT), args[0].toLowerCase(Locale.ROOT));
         if (args.length == 2) {
-            String sub = ALIASES.getOrDefault(args[0].toLowerCase(Locale.ROOT), args[0].toLowerCase(Locale.ROOT));
             switch (sub) {
-                case "trust", "add", "deny", "remove", "undeny", "visit", "home", "list", "setowner" -> {
-                    String prefix = args[1].toLowerCase(Locale.ROOT);
-                    return Bukkit.getOnlinePlayers().stream()
-                            .map(Player::getName)
-                            .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(prefix))
-                            .collect(Collectors.toList());
+                case "trust", "add", "deny", "setowner", "list" -> {
+                    return filter(playerNames(), args[1]);
+                }
+                case "remove" -> {
+                    return filter(listedNames(sender, true), args[1]);
+                }
+                case "undeny" -> {
+                    return filter(listedNames(sender, false), args[1]);
+                }
+                case "visit", "home" -> {
+                    Set<String> options = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+                    options.addAll(playerNames());
+                    for (Plot plot : manager().allPlots()) {
+                        if (plot.alias() != null && !plot.alias().isEmpty()) {
+                            options.add(plot.alias());
+                        }
+                    }
+                    return filter(new ArrayList<>(options), args[1]);
                 }
                 case "sethome" -> {
                     return List.of("reset");
@@ -1016,15 +1141,90 @@ public final class PlotCommand implements TabExecutor {
                 }
             }
         }
-        if (args.length == 3 && args[0].equalsIgnoreCase("flag")) {
-            return filter(List.of("time", "weather"), args[2]);
+        if (args.length == 3) {
+            switch (sub) {
+                case "flag" -> {
+                    return filter(List.of("time", "weather"), args[2]);
+                }
+                case "visit", "home", "list" -> {
+                    // 第二個參數是玩家時，補上那位玩家的地皮別名與編號（list 補頁數）
+                    UUID target = isInteger(args[1]) ? null : resolve(args[1]);
+                    if (target == null) {
+                        return List.of();
+                    }
+                    List<Plot> plots = manager().getOwnedBasePlots(target, null);
+                    List<String> options = new ArrayList<>();
+                    int count = sub.equals("list")
+                            ? (plots.size() + plugin.listPageSize() - 1) / plugin.listPageSize()
+                            : plots.size();
+                    for (int i = 1; i <= count; i++) {
+                        options.add(String.valueOf(i));
+                    }
+                    if (!sub.equals("list")) {
+                        for (Plot plot : plots) {
+                            if (plot.alias() != null && !plot.alias().isEmpty()) {
+                                options.add(plot.alias());
+                            }
+                        }
+                    }
+                    return filter(options, args[2]);
+                }
+                default -> {
+                    return List.of();
+                }
+            }
         }
         return List.of();
     }
 
+    /**
+     * 在線玩家加上所有地皮擁有者的名稱。
+     */
+    private List<String> playerNames() {
+        Set<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            names.add(online.getName());
+        }
+        for (Plot plot : manager().allPlots()) {
+            UUID owner = plot.owner();
+            if (owner == null || owner.equals(Plot.EVERYONE)) {
+                continue;
+            }
+            // 查不到名稱時存空字串，下次就不用再查
+            String name = ownerNames.computeIfAbsent(owner, uuid -> {
+                String found = Bukkit.getOfflinePlayer(uuid).getName();
+                return found == null ? "" : found;
+            });
+            if (!name.isEmpty()) {
+                names.add(name);
+            }
+        }
+        return new ArrayList<>(names);
+    }
+
+    /**
+     * 腳下地皮名單裡的玩家：remove 用信任者、成員、禁止名單，undeny 只用禁止名單。
+     * 不在地皮上時改用在線玩家。
+     */
+    private List<String> listedNames(CommandSender sender, boolean all) {
+        if (!(sender instanceof Player player)) {
+            return List.of();
+        }
+        Plot plot = manager().getPlotAt(player.getLocation());
+        if (plot == null) {
+            return Bukkit.getOnlinePlayers().stream().map(Player::getName).collect(Collectors.toList());
+        }
+        Set<UUID> uuids = new LinkedHashSet<>(plot.denied());
+        if (all) {
+            uuids.addAll(plot.trusted());
+            uuids.addAll(plot.members());
+        }
+        return uuids.stream().map(PlotCommand::name).collect(Collectors.toList());
+    }
+
     private static List<String> filter(List<String> options, String prefix) {
         String lower = prefix.toLowerCase(Locale.ROOT);
-        return options.stream().filter(option -> option.startsWith(lower)).collect(Collectors.toList());
+        return options.stream().filter(option -> option.toLowerCase(Locale.ROOT).startsWith(lower)).collect(Collectors.toList());
     }
 
 }

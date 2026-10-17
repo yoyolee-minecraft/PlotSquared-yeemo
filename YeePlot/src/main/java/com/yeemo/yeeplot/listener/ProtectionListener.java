@@ -30,6 +30,7 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.BlockSpreadEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
@@ -169,7 +170,7 @@ public final class ProtectionListener implements Listener {
         String name = type.name();
         return name.endsWith("_HOE") || name.endsWith("_AXE") || name.endsWith("_SHOVEL")
                 || name.endsWith("_SPAWN_EGG") || name.endsWith("_BOAT") || name.endsWith("_RAFT")
-                || name.endsWith("MINECART") || name.endsWith("_DYE")
+                || name.endsWith("MINECART") || name.endsWith("_DYE") || name.endsWith("_CUSHION")
                 || type == Material.BONE_MEAL || type == Material.ARMOR_STAND || type == Material.END_CRYSTAL
                 || type == Material.FLINT_AND_STEEL || type == Material.FIRE_CHARGE || type == Material.HONEYCOMB
                 || type == Material.INK_SAC || type == Material.GLOW_INK_SAC || type == Material.SHEARS
@@ -240,6 +241,19 @@ public final class ProtectionListener implements Listener {
     public void onHangingPlace(HangingPlaceEvent event) {
         Player player = event.getPlayer();
         if (player != null && deny(player, event.getEntity().getLocation(), PlotPermissions.Action.BUILD)) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * 用物品放出來的實體（盔甲座、船、礦車、終界水晶、26.3 的坐墊等）：以實體實際的位置檢查建築權限，
+     * 新版本加入新的可放置實體時也能擋下，不用等名單更新。
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onEntityPlace(EntityPlaceEvent event) {
+        Player player = event.getPlayer();
+        Location location = event.getEntity().getLocation();
+        if (player != null && inPlotWorld(location) && deny(player, location, PlotPermissions.Action.BUILD)) {
             event.setCancelled(true);
         }
     }

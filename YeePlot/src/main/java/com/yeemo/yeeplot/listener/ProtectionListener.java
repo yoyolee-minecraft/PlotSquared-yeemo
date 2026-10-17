@@ -4,12 +4,14 @@ import com.yeemo.yeeplot.Messages;
 import com.yeemo.yeeplot.plot.Plot;
 import com.yeemo.yeeplot.plot.PlotId;
 import com.yeemo.yeeplot.plot.PlotManager;
+import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.entity.Enderman;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.Ravager;
@@ -31,6 +33,7 @@ import org.bukkit.event.block.BlockSpreadEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityPlaceEvent;
+import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
@@ -218,6 +221,37 @@ public final class ProtectionListener implements Listener {
             return;
         }
         if (deny(attacker, victim.getLocation(), PlotPermissions.Action.DESTROY)) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * 玩家左鍵攻擊任何實體之前觸發。26.3 的坐墊被打破時不會觸發 EntityDamageByEntityEvent，
+     * 所以在這裡先擋；其他實體被擋下後也不會再進到傷害事件。
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onPreAttack(PrePlayerAttackEntityEvent event) {
+        Entity victim = event.getAttacked();
+        if (victim instanceof Player || !inPlotWorld(victim.getLocation())) {
+            return;
+        }
+        if (deny(event.getPlayer(), victim.getLocation(), PlotPermissions.Action.DESTROY)) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * 玩家射出的投射物打到非生物實體（坐墊、船、礦車等）：沒有破壞權限時讓投射物直接穿過。
+     * 生物仍交給 EntityDamageByEntityEvent 處理。
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onProjectileHit(ProjectileHitEvent event) {
+        Entity hit = event.getHitEntity();
+        if (hit == null || hit instanceof LivingEntity || hit instanceof Projectile || !inPlotWorld(hit.getLocation())) {
+            return;
+        }
+        if (event.getEntity().getShooter() instanceof Player player
+                && permissions.check(player, hit.getLocation(), PlotPermissions.Action.DESTROY) != PlotPermissions.Result.ALLOW) {
             event.setCancelled(true);
         }
     }

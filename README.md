@@ -3,7 +3,7 @@
 Yeemo 伺服器的地皮插件。它是 PlotSquared 的輕量版，只保留地皮生成、認領、權限保護等基礎功能，
 並且**直接讀寫 PlotSquared 原本的設定檔與資料庫**：可以直接取代 PlotSquared，也可以隨時換回去。
 
-- 需要 Paper 1.21 以上、Java 21
+- 需要 Paper 26.3、Java 25（還在 1.21 的伺服器請用 1.5.1）
 - 選用整合：WorldEdit 或 FastAsyncWorldEdit（FAWE）、AxiomPaper；沒安裝的話，對應的程式碼不會載入
 - 不打包任何第三方函式庫（SQLite 與 MySQL 驅動由伺服器本身提供），jar 約 140 KB
 

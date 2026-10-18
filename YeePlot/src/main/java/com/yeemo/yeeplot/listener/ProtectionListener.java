@@ -4,12 +4,19 @@ import com.yeemo.yeeplot.Messages;
 import com.yeemo.yeeplot.plot.Plot;
 import com.yeemo.yeeplot.plot.PlotId;
 import com.yeemo.yeeplot.plot.PlotManager;
+import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.entity.Enderman;
+import org.bukkit.DyeColor;
+import org.bukkit.GameMode;
+import org.bukkit.entity.Cushion;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntitySnapshot;
+import org.bukkit.entity.Item;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.Ravager;
@@ -30,6 +37,9 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.BlockSpreadEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDropItemEvent;
+import org.bukkit.event.entity.EntityPlaceEvent;
+import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
@@ -45,7 +55,10 @@ import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.event.world.StructureGrowEvent;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * 地皮保護：建築、破壞、互動、液體與活塞跨界、爆炸、禁止進入。
@@ -169,7 +182,7 @@ public final class ProtectionListener implements Listener {
         String name = type.name();
         return name.endsWith("_HOE") || name.endsWith("_AXE") || name.endsWith("_SHOVEL")
                 || name.endsWith("_SPAWN_EGG") || name.endsWith("_BOAT") || name.endsWith("_RAFT")
-                || name.endsWith("MINECART") || name.endsWith("_DYE")
+                || name.endsWith("MINECART") || name.endsWith("_DYE") || name.endsWith("_CUSHION")
                 || type == Material.BONE_MEAL || type == Material.ARMOR_STAND || type == Material.END_CRYSTAL
                 || type == Material.FLINT_AND_STEEL || type == Material.FIRE_CHARGE || type == Material.HONEYCOMB
                 || type == Material.INK_SAC || type == Material.GLOW_INK_SAC || type == Material.SHEARS
@@ -221,6 +234,113 @@ public final class ProtectionListener implements Listener {
         }
     }
 
+    /**
+     * 坐墊被打破時掉落的物品與當下的完整資料，等同一個 tick 內的 PrePlayerAttackEntityEvent 決定要不要還原。
+     */
+    private record CushionDrop(Item item, EntitySnapshot snapshot) {
+    }
+
+    /**
+     * 自然掉落（下面的方塊被拿走）不會有攻擊事件，留著的紀錄超過上限就丟掉最舊的。
+     */
+    private final Map<UUID, CushionDrop> cushionDrops = new LinkedHashMap<>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<UUID, CushionDrop> eldest) {
+            return size() > 32;
+        }
+    };
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityDrop(EntityDropItemEvent event) {
+        Entity entity = event.getEntity();
+        if (entity instanceof Cushion && inPlotWorld(entity.getLocation())) {
+            // 掉落時坐墊還沒被移除，這時候的快照包含方向等所有資料
+            cushionDrops.put(entity.getUniqueId(), new CushionDrop(event.getItemDrop(), entity.createSnapshot()));
+        }
+    }
+
+    /**
+     * 玩家左鍵攻擊任何實體時觸發。
+     * 26.3 的坐墊在 Paper 算出這次攻擊之前（skipAttackInteraction）就已經被打破、掉出物品，
+     * 事件也會以「已取消」的狀態送來，取消它擋不住；所以沒有權限時把剛掉落的物品收回、
+     * 在原位放回一個同顏色同方向的坐墊。其他實體照常取消攻擊。
+     */
+    @EventHandler(priority = EventPriority.LOW)
+    public void onPreAttack(PrePlayerAttackEntityEvent event) {
+        Entity victim = event.getAttacked();
+        CushionDrop drop = cushionDrops.remove(victim.getUniqueId());
+        if (victim instanceof Player || !inPlotWorld(victim.getLocation())) {
+            return;
+        }
+        boolean broken = victim instanceof Cushion && !victim.isValid();
+        if (event.isCancelled() && !broken) {
+            return;
+        }
+        if (!deny(event.getPlayer(), victim.getLocation(), PlotPermissions.Action.DESTROY)) {
+            return;
+        }
+        event.setCancelled(true);
+        if (broken) {
+            // 創造模式打破不會掉落物品，不用收回
+            restoreCushion((Cushion) victim, drop, event.getPlayer().getGameMode() == GameMode.CREATIVE);
+        }
+    }
+
+    /**
+     * 只有確定收回了掉落物（或本來就不會掉落）才放回坐墊，避免變成複製坐墊的方法。
+     * 有掉落時的快照就照快照複製一個（方向、顏色等全部相同），沒有的話自己設定位置、方向與顏色。
+     */
+    private static void restoreCushion(Cushion cushion, CushionDrop drop, boolean noDrop) {
+        Location location = cushion.getLocation();
+        boolean reclaimed = noDrop;
+        if (drop != null && drop.item() != null && drop.item().isValid()) {
+            drop.item().remove();
+            reclaimed = true;
+        } else if (!noDrop) {
+            // 沒收到掉落事件時，找同一個 tick 生成在旁邊的坐墊物品
+            for (Entity nearby : location.getWorld().getNearbyEntities(location, 1.5, 1.5, 1.5)) {
+                if (nearby instanceof Item item && item.getTicksLived() <= 1
+                        && item.getItemStack().getType().name().endsWith("_CUSHION")) {
+                    item.remove();
+                    reclaimed = true;
+                    break;
+                }
+            }
+        }
+        if (!reclaimed) {
+            return;
+        }
+        if (drop != null && drop.snapshot() != null) {
+            drop.snapshot().createEntity(location);
+            return;
+        }
+        DyeColor color = cushion.getColor();
+        float yaw = location.getYaw();
+        float pitch = location.getPitch();
+        location.getWorld().spawn(location, Cushion.class, restored -> {
+            restored.setRotation(yaw, pitch);
+            if (color != null) {
+                restored.setColor(color);
+            }
+        });
+    }
+
+    /**
+     * 玩家射出的投射物打到非生物實體（坐墊、船、礦車等）：沒有破壞權限時讓投射物直接穿過。
+     * 生物仍交給 EntityDamageByEntityEvent 處理。
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onProjectileHit(ProjectileHitEvent event) {
+        Entity hit = event.getHitEntity();
+        if (hit == null || hit instanceof LivingEntity || hit instanceof Projectile || !inPlotWorld(hit.getLocation())) {
+            return;
+        }
+        if (event.getEntity().getShooter() instanceof Player player
+                && permissions.check(player, hit.getLocation(), PlotPermissions.Action.DESTROY) != PlotPermissions.Result.ALLOW) {
+            event.setCancelled(true);
+        }
+    }
+
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     public void onHangingBreak(HangingBreakByEntityEvent event) {
         Entity remover = event.getRemover();
@@ -240,6 +360,19 @@ public final class ProtectionListener implements Listener {
     public void onHangingPlace(HangingPlaceEvent event) {
         Player player = event.getPlayer();
         if (player != null && deny(player, event.getEntity().getLocation(), PlotPermissions.Action.BUILD)) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * 用物品放出來的實體（盔甲座、船、礦車、終界水晶、26.3 的坐墊等）：以實體實際的位置檢查建築權限，
+     * 新版本加入新的可放置實體時也能擋下，不用等名單更新。
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onEntityPlace(EntityPlaceEvent event) {
+        Player player = event.getPlayer();
+        Location location = event.getEntity().getLocation();
+        if (player != null && inPlotWorld(location) && deny(player, location, PlotPermissions.Action.BUILD)) {
             event.setCancelled(true);
         }
     }

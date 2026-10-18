@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 25
       - name: Build
         run: ./gradlew -p YeePlot build
       - name: Upload Jar
@@ -41,9 +41,18 @@ jobs:
             echo "Release $TAG 已存在，略過"
             exit 0
           fi
+          # Release 說明只放 RELEASE_NOTES.md 開頭的介紹與這個版本的段落（## <版本> 到下一個 ##），舊版本的內容留在檔案裡
+          awk -v ver="$VERSION" '
+            /^## / { inside = ($2 == ver); started = 1 }
+            !started || inside { print }
+          ' YeePlot/RELEASE_NOTES.md > release-notes.md
+          if ! grep -q "^## $VERSION" release-notes.md; then
+            echo "RELEASE_NOTES.md 沒有 ## $VERSION 的段落" >&2
+            exit 1
+          fi
           gh release create "$TAG" YeePlot/build/libs/*.jar \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "YeePlot $VERSION" \
-            --notes-file YeePlot/RELEASE_NOTES.md \
+            --notes-file release-notes.md \
             --prerelease
